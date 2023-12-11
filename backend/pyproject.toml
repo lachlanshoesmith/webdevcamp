@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "webdevcamp-backend"
+version = "0.1.0"
+description = "Backend API for webdevcamp"
+authors = ["Lachlan Shoesmith <12870244+lachlanshoesmith@users.noreply.github.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
