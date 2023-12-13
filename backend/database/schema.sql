@@ -5,12 +5,14 @@ create table Account (
 	username			varchar(20)		not null	unique,
 	password			text			not null,
 	registrationDate	timestamp		default		current_timestamp,
+	/* salt is username + registrationDate concatenated */
 	primary key	(id)
 );
 
-create table Adult (
+create table FullAccount (
 	accountID			serial,
 	email				text			not null	unique,
+	phoneNumber			text,
 	primary key			(accountID),
 	foreign key			(accountID)		references	Account(id)
 );
@@ -50,15 +52,18 @@ create table HasChild (
 );
 
 create table OwnsWebsite (
-	-- todo: only an administrator or student can own websites.
-	-- 'accountID' should only reference either Student(id) or Administrator(id)
-	-- the er model should also be updated to reflect that a student only owns
-	-- one website, but an administrator can manage every website owned by some students.
 	accountID		serial,
 	websiteID		serial,
 	foreign key		(accountID)			references	Account(id),
 	foreign key		(websiteID)			references	Website(id)
 	primary key		(accountID, websiteID)
+	check           (
+					accountID in
+						(select id from Student)
+					or
+					accountID in
+						(select id from Administrator)
+					)
 );
 
 create table Website (
