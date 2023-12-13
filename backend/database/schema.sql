@@ -66,6 +66,47 @@ create table OwnsWebsite (
 					)
 );
 
+/* 
+-- todo: possibly add 'friend' entity, which can be either a viewer
+		 or another student	
+*/
+
+create table Viewer (
+	accountID		serial,
+	foreign key		(accountID)			references	Account(id)
+	primary key		(accountID)
+)
+
+create table Friendship (
+	studentID		serial,
+	friendID		serial,
+	foreign key		(studentID)			references	Student(id),
+	foreign key		(friendID)			references	Account(id)
+	primary key		(studentID, viewerID)
+	/* a student may be friends with either another student or a viewer */
+	check           (
+					accountID in
+						(select id from Student)
+					or
+					accountID in
+						(select id from Viewer)
+					)
+)
+
+create table CanViewWebsite (
+	accountID		serial,
+	websiteID		serial,
+	foreign key		(accountID)			references	Account(id),
+	foreign key		(websiteID)			references	Website(id)
+	primary key		(accountID, websiteID)
+	check           (
+					accountID in
+						(select id from Viewer)
+					or
+						(select id from Guardian)
+	)
+)
+
 create table Website (
 	websiteID		serial,
 	title			text,
