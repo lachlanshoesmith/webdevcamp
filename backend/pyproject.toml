@@ -9,6 +9,8 @@ readme = "README.md"
 python = "^3.10"
 fastapi = "^0.104.1"
 uvicorn = {extras = ["standard"], version = "^0.24.0.post1"}
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+cryptography = "^41.0.7"
 
 
 [build-system]
