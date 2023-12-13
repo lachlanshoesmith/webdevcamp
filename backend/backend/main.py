@@ -24,10 +24,10 @@ class Token(BaseModel):
 
 app = FastAPI()
 
-oauth2Scheme = OAuth2PasswordBearer(tokenUrl='token')
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token')
 
 
-# def createAccessToken(data: dict, expiresDelta: timedelta | None = None):
+# def create_access_token(data: dict, expires_delta: timedelta | None = None):
 #     '''
 #     Creates an access token by encoding the given data using JWT.
 
@@ -41,20 +41,20 @@ oauth2Scheme = OAuth2PasswordBearer(tokenUrl='token')
 #     Raises:
 #         <ExceptionType>: <Description of the exception raised, if any.>
 #     '''
-#     toEncode = data.copy()
-#     if expiresDelta:
-#         expire = datetime.utcnow() + expiresDelta
+#     to_encode = data.copy()
+#     if expires_delta:
+#         expire = datetime.utcnow() + expires_delta
 #     else:
 #         expire = datetime.utcnow() + timedelta(minutes=15)
-#     toEncode.update({'exp': expire})
-#     encodedJWT = jwt.encode(toEncode, SECRET_KEY, algorithm=ALGORITHM)
-#     return encodedJWT
+#     to_encode.update({'exp': expire})
+#     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+#     return encoded_jwt
 
 # user management routes
 
 
 @app.get('/items/')
-async def readItems(token: Annotated[str, Depends(oauth2Scheme)]):
+async def read_items(token: Annotated[str, Depends(oauth2_scheme)]):
     return {'token': token}
 
 
