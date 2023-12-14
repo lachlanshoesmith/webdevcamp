@@ -3,7 +3,7 @@ create table Account (
 	givenName			text					not null,
 	familyName			text					not null,
 	username			varchar(20)				not null	unique,
-	password			text					not null,
+	hashed_password		text					not null,
 	registrationDate	timestamp				default		current_timestamp,
 	/* salt is username + registrationDate concatenated */
 	primary key	(id)

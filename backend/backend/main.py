@@ -33,10 +33,14 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
-
-app = FastAPI()
+class TokenData(BaseModel):
+    username: Union[str, None] = None
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token')
+
+pwd_context = CryptContext(schemes = ['bcrypt'], deprecated = 'auto')
+
+app = FastAPI()
 
 db_pool = psycopg3.pool.SimpleConnectionPool(
     minconn = 1,
@@ -48,6 +52,12 @@ db_pool = psycopg3.pool.SimpleConnectionPool(
     database = os.getenv('DB_NAME')
 )
 
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
 def fake_decode_token(token):
     return FullAccount(
         account_id = -1
@@ -58,41 +68,75 @@ def fake_decode_token(token):
         phone_number = '+61491161258'
     )
 
-def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
-    user = fake_decode_token(token)
+def get_user(username: str):
+    conn = db_pool.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f'''
+                select  *
+                from    account
+                where   username = {username}
+            ''')
+            user_data = cur.fetchone()
+            return user_data
+    except Error as e:
+        raise HTTPException(status_code = 500, detail = f'Couldn\'t get user. {error}')
+    finally:
+        db_pool.putconn(conn)
+
+def authenticate_user(username: str, password: str):
+    user = get_user(username)
     if not user:
-        raise HTTPException(
-            status_code = status.HTTP_401_UNAUTHORIZED,
-            detail = 'Invalid authentication credentials',
-            headers = {'WWW-Authenticate': 'Bearer'},
-        )
+        return False
+    if not verify_password(password, user.hashed_password):
+        return False
     return user
 
-# def create_access_token(data: dict, expires_delta: timedelta | None = None):
-#     '''
-#     Creates an access token by encoding the given data using JWT.
+def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+    credentials_exception = HTTPException(
+        status_code = status.HTTP_401_UNAUTHORIZED,
+        detail = 'Invalid authentication credentials',
+        headers = {'WWW-Authenticate': 'Bearer'},
+    )
 
-#     Args:
-#         data (dict): The data to be encoded into the access token.
-#         expiresDelta (timedelta | None, optional): The time delta representing the expiration time of the access token. Defaults to None.
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        # 'sub' is the subject of the JWT token
+        # user identification is typically stored as the subject
+        username: str = payload.get('sub')
+        if username is None:
+            raise credentials_exception
+        token_data = TokenData(username = username)
+    except JWTError:
+        raise credentials_exception
+    user = get_user(username = token_data.username)
+    if user is None:
+        raise credentials_exception
+    return user
 
-#     Returns:
-#         str: The encoded access token.
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
+    '''
+    Creates an access token by encoding the given data using JWT.
 
-#     Raises:
-#         <ExceptionType>: <Description of the exception raised, if any.>
-#     '''
-#     to_encode = data.copy()
-#     if expires_delta:
-#         expire = datetime.utcnow() + expires_delta
-#     else:
-#         expire = datetime.utcnow() + timedelta(minutes=15)
-#     to_encode.update({'exp': expire})
-#     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-#     return encoded_jwt
+    Args:
+        data (dict): The data to be encoded into the access token.
+        expiresDelta (timedelta | None, optional): The time delta representing the expiration time of the access token. Defaults to None.
 
-# user management routes
+    Returns:
+        str: The encoded access token.
 
+    Raises:
+        <ExceptionType>: <Description of the exception raised, if any.>
+    '''
+
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes = 15)
+    to_encode.update({ 'exp': expire })
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 @app.get('/items/')
 async def read_items(token: Annotated[str, Depends(oauth2_scheme)]):
@@ -106,31 +150,19 @@ async def register():
 
 @app.post('/login')
 async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
-    conn = db_pool.getconn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(f'''
-                select  *
-                from    account
-                where   username = {form_data.username}
-            ''')
-            user_data = cur.fetchone()
-
-            if not user_data:
-                raise HTTPException(status_code = 400, detail = 'Incorrect username or password')
-
-            # ** is like spread in js
-            user = UserInDB(**user_data)
-
-            hashed_password = hash_password(form_data.password)
-            if not hashed_password == user['hashed_password']:
-                raise HTTPException(status_code = 400, detail = 'Incorrect username or password')
-            
-            return { 'access_token': get_token(user.account_id), 'token_type': 'bearer' }
-    except Error as e:
-        raise HTTPException(status_code = 500, detail = f'Database error. {error}')
-    finally:
-        db_pool.putconn(conn)
+    user = authenticate_user(form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code = 400,
+            detail = 'Incorrect username or password',
+            headers = { 'WWW-Authenticate': 'Bearer' }
+        )
+    access_token_expires = timedelta(minutes = ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data = { 'sub': user.username },
+        expires_delta = access_token_expires
+    )
+    return { 'access_token': access_token, 'token_type': 'bearer' }
 
 @app.get('/users/me')
 async def read_users_me(current_user: Annotated[FullAccount, Depends(get_current_user)]):
