@@ -51,30 +51,26 @@ create table HasChild (
 	primary key			(studentID, guardianID)
 );
 
-create table OwnsWebsite (
-	accountID			serial,
-	websiteID			serial,
-	foreign key			(accountID)				references	Account(id),
-	foreign key			(websiteID)				references	Website(id)
-	primary key			(accountID, websiteID)
-	check           	(
-						accountID in
-							(select id from Student)
-						or
-						accountID in
-							(select id from Administrator)
-						)
+create table AdministratorOwnsWebsite (
+    adminID 			serial,
+    websiteID 			serial,
+    foreign key 		(adminID)				references Administrator(adminID),
+    foreign key			(websiteID)				references Website(websiteID),
+    primary key			(adminID, websiteID)
 );
 
-/* 
--- todo: possibly add 'friend' entity, which can be either a viewer
-		 or another student	
-*/
+create table StudentOwnsWebsite (
+	accountID			serial,
+	websiteID			serial,
+	foreign key			(accountID)				references	Student(id),
+	foreign key			(websiteID)				references	Website(id)
+	primary key			(accountID, websiteID)
+);
 
 create table Viewer (
-		accountID		serial,
-		foreign key		(accountID)				references	Account(id)
-		primary key		(accountID)
+	accountID			serial,
+	foreign key			(accountID)				references	Account(id)
+	primary key			(accountID)
 )
 
 create table Friendship (
@@ -109,16 +105,17 @@ create table CanViewWebsite (
 
 create table Website (
 	websiteID			serial,
-	title				text,
+	title				text					not null,
 	primary key			(websiteID)
 );
 
 create table Webpage (
-	-- todo: depict relationship between website and webpage
 	webpageID			serial,
-	title				text,
-	filename			text,
-	contents			text,	-- url to HTML file
-						-- possibly add stylesheet and script? idk
+	websiteID			serial,
+	title				text					not null,
+	filename			text					not null,
+	-- url to HTML file
+	contents			text					not null,
 	primary key			(webpageID)
+	foreign key			(websiteID)				references	Website(id)
 );
