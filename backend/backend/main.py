@@ -204,7 +204,7 @@ async def create_website(website: ProposedWebsite):
             website_id = response[0]
             try:
                 await cur.execute(sql.SQL('''
-                    insert into {owner_type}OwnsWebsite (accountID, websiteID)
+                    insert into {owner_type}OwnsWebsite ({owner_type}ID, websiteID)
                     values ({owner_id}, {website_id})
                 ''').format(
                     owner_type=sql.SQL(website.owner_type),
@@ -216,7 +216,7 @@ async def create_website(website: ProposedWebsite):
             except IntegrityError as e:
                 if 'not present' in e.diag.message_detail:
                     raise HTTPException(
-                        status_code=400, detail=f'The user does not exist or they are not a {website.owner}.')
+                        status_code=400, detail=f'The user does not exist or they are not a {website.owner_type}.')
                 else:
                     raise HTTPException(status_code=400, detail=e)
 

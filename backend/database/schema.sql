@@ -98,17 +98,17 @@ create table Webpage (
 create table AdministratorOwnsWebsite (
     administratorID		serial,
     websiteID 			serial,
-    foreign key 		(adminID)				references Administrator(id),
+    foreign key 		(administratorID)		references Administrator(id),
     foreign key			(websiteID)				references Website(id),
-    primary key			(adminID, websiteID)
+    primary key			(administratorID, websiteID)
 );
 
 create table StudentOwnsWebsite (
 	studentID			serial,
 	websiteID			serial,
-	foreign key			(accountID)				references	Student(id),
+	foreign key			(studentID)				references	Student(id),
 	foreign key			(websiteID)				references	Website(id),
-	primary key			(accountID, websiteID)
+	primary key			(studentID, websiteID)
 );
 
 create table CanViewWebsite (
