@@ -48,7 +48,7 @@ class TokenData(BaseModel):
 
 class StudentOrAdministrator(str, Enum):
     student = 'student'
-    admin = 'admin'
+    administrator = 'administrator'
 
 
 class ProposedWebsite(BaseModel):
@@ -192,65 +192,33 @@ async def get_website(website_id: int):
 
 @app.post('/website')
 async def create_website(website: ProposedWebsite):
-    async with db_pool:
-        async with db_pool.connection() as conn:
-            async with conn.cursor() as cur:
-                try:
-                    await cur.execute(f'''
-                        insert into website            
-                                    (title)
-                        values      ('{website.title}')
-                        returning   id;
-                    ''')
+    async with db_pool, db_pool.connection() as conn, conn.cursor() as cur:
+        try:
+            await cur.execute('''
+                insert into website (title)
+                values (%s)
+                returning id;
+            ''', (website.title))
 
-                    response = await cur.fetchone()
-                    websiteID = response[0]
+            response = await cur.fetchone()
+            website_id = response[0]
 
-                    if website.owner == 'student':
-                        try:
-                            await cur.execute(f'''
-                                insert into studentOwnsWebsite (accountID, websiteID)
-                                values({website.ownerID}, {websiteID})                    
-                            ''')
+            try:
+                await cur.execute('''
+                    insert into %sOwnsWebsite (accountID, websiteID)
+                    values(%s, %s)                    
+                ''', (website.owner, website.ownerID, website_id))
 
-                            await conn.commit()
-                        except IntegrityError as e:
-                            if 'not present' in e.diag.message_detail:
-                                raise HTTPException(
-                                    status_code = 400,
-                                    detail = 'The user does not exist or they are not a student.'
-                                )
-                            else:
-                                raise HTTPException(
-                                    status_code = 400,
-                                    detail = e
-                                )
-
-                    elif website.owner == 'admin':
-                        try:
-                            await cur.execute(f'''
-                                insert into administratorOwnsWebsite (adminID, websiteID)
-                                values({website.ownerID}, {websiteID})                    
-                            ''')
-
-                            await conn.commit()
-                        except IntegrityError as e:
-                            if 'not present' in e.diag.message_detail:
-                                raise HTTPException(
-                                    status_code = 400,
-                                    detail = 'The user does not exist or they are not an administrator.'
-                                )
-                            else:
-                                raise HTTPException(
-                                    status_code = 400,
-                                    detail = e
-                                )
-                except IntegrityError:
-                    raise HTTPException(
-                        status_code = 400,
-                        detail = 'Website already exists'
-                    )
-                return websiteID
+                await conn.commit()
+            except IntegrityError as e:
+                if 'not present' in e.diag.message_detail:
+                    raise HTTPException(status_code=400, detail=f'The user does not exist or they are not a {website.owner}.')
+                else:
+                    raise HTTPException(status_code=400, detail=e)
+                    
+        except IntegrityError:
+            raise HTTPException(status_code=400, detail='Website already exists')
+        return website_id
 
 
 @app.post('/login')
