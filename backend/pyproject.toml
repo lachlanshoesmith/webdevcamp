@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "webdevcamp-backend"
+name = "backend"
 version = "0.1.0"
 description = "Backend API for webdevcamp"
 authors = ["Lachlan Shoesmith <12870244+lachlanshoesmith@users.noreply.github.com>"]
@@ -12,9 +12,9 @@ uvicorn = {extras = ["standard"], version = "^0.24.0.post1"}
 python-jose = {extras = ["cryptography"], version = "^3.3.0"}
 cryptography = "^41.0.7"
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
-psycopg = {extras = ["pool"], version = "^3.1.14"}
 python-dotenv = "^1.0.0"
 pydantic = "^2.5.2"
+psycopg = {extras = ["binary", "pool"], version = "^3.1.15"}
 
 
 [tool.poetry.group.dev.dependencies]

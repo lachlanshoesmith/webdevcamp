@@ -1,10 +1,11 @@
-import os, psycopg3
+import os
+from psycopg_pool import ConnectionPool
 from fastapi import Depends, FastAPI
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from dotenv import load_dotenv
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from typing import Annotated
+from typing import Annotated, Union
 from pydantic import BaseModel
 
 load_dotenv()
@@ -17,13 +18,13 @@ ALGORITHM = 'HS256'
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 class User(BaseModel):
-    account_id: int,
-    given_name: str,
-    family_name: str,
+    account_id: int
+    given_name: str
+    family_name: str
     username: str
 
 class FullAccount(User):
-    email: str,
+    email: str
     phone_number: str
 
 class UserInDB(User):
@@ -42,13 +43,13 @@ pwd_context = CryptContext(schemes = ['bcrypt'], deprecated = 'auto')
 
 app = FastAPI()
 
-db_pool = psycopg3.pool.SimpleConnectionPool(
-    minconn = 1,
-    maxconn = 10,
+db_pool = ConnectionPool(
+    min_size = 1,
+    max_size = 10,
     host = os.getenv('DB_HOST'),
     port = os.getenv('DB_PORT'),
     user = os.getenv('DB_USERNAME'),
-    password = os.getEnv('DB_PASSWORD'),
+    password = os.getenv('DB_PASSWORD'),
     database = os.getenv('DB_NAME')
 )
 
@@ -60,7 +61,7 @@ def get_password_hash(password):
 
 def fake_decode_token(token):
     return FullAccount(
-        account_id = -1
+        account_id = -1,
         given_name = 'Lachlan Charles',
         family_name = 'Shoesmith',
         username = token + 'fakedecoded',

@@ -10,23 +10,23 @@ create table Account (
 );
 
 create table FullAccount (
-	accountID			serial,
+	id					serial,
 	email				text					not null	unique,
 	phoneNumber			text,
-	primary key			(accountID),
-	foreign key			(accountID)				references	Account(id)
+	primary key			(id),
+	foreign key			(id)					references	Account(id)
 );
 
 create table Student (
-	studentID			serial,
-	primary key			(studentID),
-	foreign key			(studentID)				references	Account(id)
+	id					serial,
+	primary key			(id),
+	foreign key			(id)					references	Account(id)
 );
 
 create table Administrator (
-	adminID				serial,
-	primary key			(adminID),
-	foreign key			(adminID)				references	Account(id)
+	id					serial,
+	primary key			(id),
+	foreign key			(id)					references	Account(id)
 );
 
 create table Teaches (
@@ -38,24 +38,68 @@ create table Teaches (
 );
 
 create table Guardian (
-	guardianID			serial,
-	primary key			(guardianID),
-	foreign key			(guardianID)			references	Account(id)
+	id					serial,
+	primary key			(id),
+	foreign key			(id)					references	Account(id)
 );
 
 create table HasChild (
 	studentID			serial,
 	guardianID			serial,
 	foreign key			(studentID)				references	Student(id),
-	foreign key			(guardianID)			references	Guardian(id)
+	foreign key			(guardianID)			references	Guardian(id),
 	primary key			(studentID, guardianID)
+);
+
+create table Viewer (
+	id					serial,
+	foreign key			(id)				references	Account(id),
+	primary key			(id)
+);
+
+create table Friendship (
+	studentID			serial,
+	friendID			serial,
+	foreign key			(studentID)				references	Student(id),
+	foreign key			(friendID)				references	Account(id),
+	primary key			(studentID, friendID)
+);
+
+/* a student may be friends with either another student or a viewer */
+create function checkFriendship() returns trigger as $$
+begin
+	if new.friendID in (select id from Student) or (select id from Viewer) then
+		return new;
+	else
+		raise exception 'Friend must be either a student or a viewer';
+	end if;
+end;
+$$ language plpgsql;
+
+create trigger checkFriendship before insert or update on Friendship for each row execute procedure checkFriendship();
+
+create table Website (
+	id					serial,
+	title				text					not null,
+	primary key			(id)
+);
+
+create table Webpage (
+	id					serial,
+	websiteID			serial,
+	title				text					not null,
+	filename			text					not null,
+	-- url to HTML file
+	contents			text					not null,
+	primary key			(id),
+	foreign key			(websiteID)				references	Website(id)
 );
 
 create table AdministratorOwnsWebsite (
     adminID 			serial,
     websiteID 			serial,
-    foreign key 		(adminID)				references Administrator(adminID),
-    foreign key			(websiteID)				references Website(websiteID),
+    foreign key 		(adminID)				references Administrator(id),
+    foreign key			(websiteID)				references Website(id),
     primary key			(adminID, websiteID)
 );
 
@@ -63,59 +107,26 @@ create table StudentOwnsWebsite (
 	accountID			serial,
 	websiteID			serial,
 	foreign key			(accountID)				references	Student(id),
-	foreign key			(websiteID)				references	Website(id)
+	foreign key			(websiteID)				references	Website(id),
 	primary key			(accountID, websiteID)
 );
-
-create table Viewer (
-	accountID			serial,
-	foreign key			(accountID)				references	Account(id)
-	primary key			(accountID)
-)
-
-create table Friendship (
-	studentID			serial,
-	friendID			serial,
-	foreign key			(studentID)				references	Student(id),
-	foreign key			(friendID)				references	Account(id)
-	primary key			(studentID, viewerID)
-	/* a student may be friends with either another student or a viewer */
-	check	          	(
-						accountID in
-							(select id from Student)
-						or
-						accountID in
-							(select id from Viewer)
-						)
-)
 
 create table CanViewWebsite (
 	accountID			serial,
 	websiteID			serial,
 	foreign key			(accountID)				references	Account(id),
-	foreign key			(websiteID)				references	Website(id)
+	foreign key			(websiteID)				references	Website(id),
 	primary key			(accountID, websiteID)
-	check	           	(
-						accountID in
-							(select id from Viewer)
-						or
-							(select id from Guardian)
-						)
-)
-
-create table Website (
-	websiteID			serial,
-	title				text					not null,
-	primary key			(websiteID)
 );
 
-create table Webpage (
-	webpageID			serial,
-	websiteID			serial,
-	title				text					not null,
-	filename			text					not null,
-	-- url to HTML file
-	contents			text					not null,
-	primary key			(webpageID)
-	foreign key			(websiteID)				references	Website(id)
-);
+create function checkViewerOfWebsite() returns trigger as $$
+begin
+	if new.accountID in (select id from Viewer) or (select id from Guardian) then
+		return new;
+	else
+		raise exception 'Additional viewers of a website must be either a guardian or a viewer';
+	end if;
+end;
+$$ language plpgsql;
+
+create trigger checkViewerOfWebsite before insert or update on CanViewWebsite for each row execute procedure checkViewerOfWebsite();
