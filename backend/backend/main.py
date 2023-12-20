@@ -7,6 +7,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from typing import Annotated, Union
 from pydantic import BaseModel
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -43,14 +44,12 @@ pwd_context = CryptContext(schemes = ['bcrypt'], deprecated = 'auto')
 
 app = FastAPI()
 
+conninfo = f'host={os.getenv("DB_HOST")} port={os.getenv("DB_PORT")} dbname={os.getenv("DB_NAME")} user={os.getenv("DB_USERNAME")} password={os.getenv("DB_PASSWORD")}'
+
 db_pool = ConnectionPool(
     min_size = 1,
     max_size = 10,
-    host = os.getenv('DB_HOST'),
-    port = os.getenv('DB_PORT'),
-    user = os.getenv('DB_USERNAME'),
-    password = os.getenv('DB_PASSWORD'),
-    database = os.getenv('DB_NAME')
+    conninfo = conninfo
 )
 
 def verify_password(plain_password, hashed_password):

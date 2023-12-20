@@ -15,6 +15,7 @@ passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 python-dotenv = "^1.0.0"
 pydantic = "^2.5.2"
 psycopg = {extras = ["binary", "pool"], version = "^3.1.15"}
+python-multipart = "^0.0.6"
 
 
 [tool.poetry.group.dev.dependencies]
