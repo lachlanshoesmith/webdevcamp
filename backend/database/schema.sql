@@ -96,7 +96,7 @@ create table Webpage (
 );
 
 create table AdministratorOwnsWebsite (
-    adminID 			serial,
+    administratorID		serial,
     websiteID 			serial,
     foreign key 		(adminID)				references Administrator(id),
     foreign key			(websiteID)				references Website(id),
@@ -104,7 +104,7 @@ create table AdministratorOwnsWebsite (
 );
 
 create table StudentOwnsWebsite (
-	accountID			serial,
+	studentID			serial,
 	websiteID			serial,
 	foreign key			(accountID)				references	Student(id),
 	foreign key			(websiteID)				references	Website(id),

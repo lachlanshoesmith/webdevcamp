@@ -9,7 +9,7 @@ from passlib.context import CryptContext
 from typing import Annotated, Union
 from pydantic import BaseModel
 from datetime import datetime, timedelta
-from psycopg import IntegrityError
+from psycopg import IntegrityError, sql
 
 load_dotenv()
 
@@ -53,8 +53,8 @@ class StudentOrAdministrator(str, Enum):
 
 class ProposedWebsite(BaseModel):
     title: str
-    owner: StudentOrAdministrator
-    ownerID: int
+    owner_type: StudentOrAdministrator
+    owner_id: int
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token')
@@ -181,11 +181,11 @@ async def get_website(website_id: int):
     async with db_pool:
         async with db_pool.connection() as conn:
             async with conn.cursor() as cur:
-                cur.execute(f'''
+                cur.execute('''
                     select  title
                     from    websites
-                    where   id = {website_id}
-                ''')
+                    where   id = %s
+                ''', (website_id))
                 website_data = cur.fetchone()
                 return website_data
 
@@ -196,28 +196,33 @@ async def create_website(website: ProposedWebsite):
         try:
             await cur.execute('''
                 insert into website (title)
-                values (%s)
+                values (%(title)s)
                 returning id;
-            ''', (website.title))
+            ''', {'title': website.title})
 
             response = await cur.fetchone()
             website_id = response[0]
-
             try:
-                await cur.execute('''
-                    insert into %sOwnsWebsite (accountID, websiteID)
-                    values(%s, %s)                    
-                ''', (website.owner, website.ownerID, website_id))
+                await cur.execute(sql.SQL('''
+                    insert into {owner_type}OwnsWebsite (accountID, websiteID)
+                    values ({owner_id}, {website_id})
+                ''').format(
+                    owner_type=sql.SQL(website.owner_type),
+                    owner_id=sql.Literal(website.owner_id),
+                    website_id=sql.Literal(website_id)
+                ))
 
                 await conn.commit()
             except IntegrityError as e:
                 if 'not present' in e.diag.message_detail:
-                    raise HTTPException(status_code=400, detail=f'The user does not exist or they are not a {website.owner}.')
+                    raise HTTPException(
+                        status_code=400, detail=f'The user does not exist or they are not a {website.owner}.')
                 else:
                     raise HTTPException(status_code=400, detail=e)
-                    
+
         except IntegrityError:
-            raise HTTPException(status_code=400, detail='Website already exists')
+            raise HTTPException(
+                status_code=400, detail='Website already exists')
         return website_id
 
 
