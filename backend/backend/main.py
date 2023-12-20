@@ -44,7 +44,7 @@ pwd_context = CryptContext(schemes = ['bcrypt'], deprecated = 'auto')
 
 app = FastAPI()
 
-conninfo = f'host={os.getenv("DB_HOST")} port={os.getenv("DB_PORT")} dbname={os.getenv("DB_NAME")} user={os.getenv("DB_USERNAME")} password={os.getenv("DB_PASSWORD")}'
+conninfo = f'host={os.getenv("DB_HOST")} port={os.getenv("DB_PORT")} dbname={os.getenv("DB_NAME")} user={os.getenv("DB_USER")} password={os.getenv("DB_PASSWORD")}'
 
 db_pool = ConnectionPool(
     min_size = 1,
