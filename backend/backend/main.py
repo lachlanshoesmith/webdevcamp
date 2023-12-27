@@ -1,7 +1,8 @@
 from enum import Enum
 import os
+import sys
 from psycopg_pool import AsyncConnectionPool
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from dotenv import load_dotenv
 from jose import JWTError, jwt
@@ -21,16 +22,29 @@ ALGORITHM = 'HS256'
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 
+class StudentOrAdministrator(str, Enum):
+    student = 'student'
+    administrator = 'administrator'
+
+
 class User(BaseModel):
-    account_id: int
     given_name: str
     family_name: str
     username: str
 
 
-class FullAccount(User):
+class LoggedInUser(User):
+    account_id: int
+
+
+class RegisteringUser(User):
+    password: str
+    account_type: StudentOrAdministrator
+
+
+class RegisteringFullUser(RegisteringUser):
     email: str
-    phone_number: str
+    phone_number: str | None = None
 
 
 class UserInDB(User):
@@ -46,11 +60,6 @@ class TokenData(BaseModel):
     username: Union[str, None] = None
 
 
-class StudentOrAdministrator(str, Enum):
-    student = 'student'
-    administrator = 'administrator'
-
-
 class ProposedWebsite(BaseModel):
     title: str
     owner_type: StudentOrAdministrator
@@ -62,6 +71,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token')
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
 app = FastAPI()
+
+if not os.getenv("DB_HOST") or not os.getenv("DB_PORT") or not os.getenv("DB_NAME") or not os.getenv("DB_USER") or not os.getenv("DB_PASSWORD"):
+    sys.exit("Could not find required database environment variables (ie. DB_HOST, DB_PORT, DB_NAME, DB_USER, or DB_PASSWORD).")
 
 conninfo = f'host={os.getenv("DB_HOST")} port={os.getenv("DB_PORT")} dbname={os.getenv("DB_NAME")} user={os.getenv("DB_USER")} password={os.getenv("DB_PASSWORD")}'
 
@@ -80,37 +92,44 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
-def fake_decode_token(token):
-    return FullAccount(
-        account_id=-1,
-        given_name='Lachlan Charles',
-        family_name='Shoesmith',
-        username=token + 'fakedecoded',
-        email='fake@gmail.com',
-        phone_number='+61491161258'
-    )
+async def get_user_from_username(username: str):
+    async with db_pool:
+        async with db_pool.connection() as conn:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(f'''
+                        select  *
+                        from    account
+                        where   username = {username}
+                    ''')
+                    user_data = cur.fetchone()
+                    return user_data
+            except AttributeError as e:
+                raise HTTPException(
+                    status_code=500, detail=f'Couldn\'t get user via username {username}.')
 
 
-def get_user(username: str):
-    conn = db_pool.getconn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(f'''
-                select  *
-                from    account
-                where   username = {username}
-            ''')
-            user_data = cur.fetchone()
-            return user_data
-    except Error as e:
-        raise HTTPException(
-            status_code=500, detail=f'Couldn\'t get user. {error}')
-    finally:
-        db_pool.putconn(conn)
+async def get_user_from_email(email: str):
+    async with db_pool:
+        async with db_pool.connection() as conn:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(f'''
+                        select  *
+                        from    account a 
+                        join    FullAccount f
+                        on      a.id = f.id
+                        where   f.email = {email}
+                    ''')
+                    user_data = cur.fetchone()
+                    return user_data
+            except AttributeError as e:
+                raise HTTPException(
+                    status_code=500, detail=f'Couldn\'t get user via email {email}.')
 
 
 def authenticate_user(username: str, password: str):
-    user = get_user(username)
+    user = get_user_from_username(username)
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
@@ -135,7 +154,7 @@ def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
-    user = get_user(username=token_data.username)
+    user = get_user_from_username(username=token_data.username)
     if user is None:
         raise credentials_exception
     return user
@@ -169,11 +188,6 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
 @app.get('/items/')
 async def read_items(token: Annotated[str, Depends(oauth2_scheme)]):
     return {'token': token}
-
-
-@app.post('/register')
-async def register():
-    return {'message': 'Hello World'}
 
 
 @app.get('/website/{website_id}')
@@ -243,6 +257,46 @@ async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
     return {'access_token': access_token, 'token_type': 'bearer'}
 
 
-@app.get('/users/me')
-async def read_users_me(current_user: Annotated[FullAccount, Depends(get_current_user)]):
-    return current_user
+async def check_if_username_exists(username: str, email: str | None):
+    user = await get_user(username)
+    if not user:
+        return False
+    if not verify_password(password, user.hashed_password):
+        return False
+    return user
+
+
+@app.post('/register/student')
+async def registerStudent(form_data: RegisteringUser):
+    return {'message': 'Hello World'}
+
+
+@app.post('/register')
+async def registerFullUser(form_data: RegisteringFullUser):
+    if form_data.account_type == 'student':
+        raise HTTPException(
+            status_code=400, detail='Students cannot register via /register. Use /register/student.')
+    # check if user exists
+    try:
+        await get_user_from_username(form_data.username)
+        await get_user_from_email(form_data.email)
+        raise HTTPException(
+            status_code=400, detail='User already exists.'
+        )
+    except HTTPException:
+        # the user does not exist, proceed to create an account
+        user_data: RegisteringUser = {
+            'username': form_data.username,
+            'password': get_password_hash(form_data.password),
+            'account_type': form_data.account_type,
+            'given_name': form_data.given_name,
+            'family_name': form_data.family_name,
+        }
+    # 2. create user
+    # 3. log in user
+    return {'message': 'Hello World'}
+
+
+# @app.get('/users/me')
+# async def read_users_me(current_user: Annotated[FullAccount, Depends(get_current_user)]):
+#     return current_user
