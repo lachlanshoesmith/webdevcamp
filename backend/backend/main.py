@@ -257,22 +257,64 @@ async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
     return {'access_token': access_token, 'token_type': 'bearer'}
 
 
-async def check_if_username_exists(username: str, email: str | None):
-    user = await get_user(username)
-    if not user:
-        return False
-    if not verify_password(password, user.hashed_password):
-        return False
-    return user
+# async def check_if_username_exists(username: str, email: str | None):
+#     user = await get_user(username)
+#     if not user:
+#         return False
+#     if not verify_password(password, user.hashed_password):
+#         return False
+#     return user
 
 
 @app.post('/register/student')
-async def registerStudent(form_data: RegisteringUser):
-    return {'message': 'Hello World'}
+async def register_student(form_data: RegisteringUser, administrator_id: int):
+    student_id = await create_account(form_data)
+    async with db_pool, db_pool.connection() as conn, conn.cursor() as cur:
+        await cur.execute('''
+            insert into Teaches (adminID, studentID)
+            values (%(administrator_id)s, %(student_id)s)
+        ''', {'adminstrator_id': administrator_id, 'student_id': student_id})
+        await conn.commit()
+        return {'student_id': student_id}
+
+
+@app.post('/register/administrator')
+async def register_administrator(form_data: RegisteringFullUser):
+    administrator_id = await create_account(form_data)
+
+
+async def create_account(user_data: RegisteringUser):
+    async with db_pool, db_pool.connection() as conn, conn.cursor() as cur:
+        try:
+            await cur.execute('''
+                    insert into account (givenname, familyname, username, hashed_password)
+                    values (%(givenname)s, %(familyname)s, %(username)s, %(hashed_password)s)
+                    returning (id);
+                ''', {'givenname': user_data.given_name,
+                      'familyname': user_data.family_name,
+                      'username': user_data.username,
+                      'hashed_password': user_data.hashed_password})
+            await cur.commit()
+            response = await cur.fetchone()
+            account_id = response[0]
+
+            await cur.execute('''
+                    insert into %(account_type) (id)
+                    values (%(id)s);
+                ''', {'account_type': user_data.account_type,
+                      'id': account_id})
+            await cur.commit()
+
+            return account_id
+
+        except IntegrityError:
+            raise HTTPException(
+                status_code=400, detail='User already exists.')
+        return account_id
 
 
 @app.post('/register')
-async def registerFullUser(form_data: RegisteringFullUser):
+async def register_full_user(form_data: RegisteringFullUser):
     if form_data.account_type == 'student':
         raise HTTPException(
             status_code=400, detail='Students cannot register via /register. Use /register/student.')
@@ -292,6 +334,7 @@ async def registerFullUser(form_data: RegisteringFullUser):
             'given_name': form_data.given_name,
             'family_name': form_data.family_name,
         }
+        # add to FulLAccounts table
     # 2. create user
     # 3. log in user
     return {'message': 'Hello World'}
