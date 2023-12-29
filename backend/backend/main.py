@@ -241,7 +241,7 @@ async def create_website(website: ProposedWebsite):
 
 
 @app.post('/login')
-async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+async def login_endpoint(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
     user = authenticate_user(form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -267,7 +267,7 @@ async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
 
 
 @app.post('/register/student')
-async def register_student(form_data: RegisteringUser, administrator_id: int):
+async def register_student_endpoint(form_data: RegisteringUser, administrator_id: int):
     student_id = await create_account(form_data)
     async with db_pool, db_pool.connection() as conn, conn.cursor() as cur:
         await cur.execute('''
@@ -276,11 +276,6 @@ async def register_student(form_data: RegisteringUser, administrator_id: int):
         ''', {'adminstrator_id': administrator_id, 'student_id': student_id})
         await conn.commit()
         return {'student_id': student_id}
-
-
-@app.post('/register/administrator')
-async def register_administrator(form_data: RegisteringFullUser):
-    administrator_id = await create_account(form_data)
 
 
 async def create_account(user_data: RegisteringUser):
@@ -313,8 +308,17 @@ async def create_account(user_data: RegisteringUser):
         return account_id
 
 
+async def register_full_account(user_data: RegisteringFullUser, id: int):
+    async with db_pool, db_pool.connection() as conn, conn.cursor() as cur:
+        await cur.execute('''
+                insert into FullAccount (id, email, phone_number)
+                values (%(id)s, %(email)s, %(phone_number)s)
+            ''', {'id': id, 'email': user_data.email, 'phone_number': user_data.phone_number})
+        await conn.commit()
+
+
 @app.post('/register')
-async def register_full_user(form_data: RegisteringFullUser):
+async def register_full_account_endpoint(form_data: RegisteringFullUser):
     if form_data.account_type == 'student':
         raise HTTPException(
             status_code=400, detail='Students cannot register via /register. Use /register/student.')
@@ -334,10 +338,11 @@ async def register_full_user(form_data: RegisteringFullUser):
             'given_name': form_data.given_name,
             'family_name': form_data.family_name,
         }
-        # add to FulLAccounts table
+        account_id = await create_account(form_data)
+        await register_full_account(form_data, account_id)
     # 2. create user
     # 3. log in user
-    return {'message': 'Hello World'}
+        return {'account_id': account_id}
 
 
 # @app.get('/users/me')

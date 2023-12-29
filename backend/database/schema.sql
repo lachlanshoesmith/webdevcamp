@@ -12,7 +12,7 @@ create table Account (
 create table FullAccount (
 	id					serial,
 	email				text					not null	unique,
-	phoneNumber			text,
+	phone_number		text,
 	primary key			(id),
 	foreign key			(id)					references	Account(id)
 );
