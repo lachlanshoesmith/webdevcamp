@@ -1,8 +1,7 @@
-from fastapi.testclient import TestClient
+import pytest
+from httpx import AsyncClient
 
 from backend import main
-
-client = TestClient(main.app)
 
 registering_student: main.RegisteringUser = {
     'username': 'neffieta',
@@ -13,13 +12,17 @@ registering_student: main.RegisteringUser = {
 }
 
 
-def test_register_student_endpoint():
-    response = client.post('/register/student', json=registering_student)
+@pytest.mark.anyio
+async def test_register_student_endpoint():
+    async with AsyncClient(app=main.app, base_url='http://test') as nc:
+        response = await nc.post('/register/student', json=registering_student)
     assert response.status_code == 200
 
 
-def test_register_student_at_incorrect_endpoint():
-    response = client.post('/register', json=registering_student)
+@pytest.mark.anyio
+async def test_register_student_at_incorrect_endpoint():
+    async with AsyncClient(app=main.app, base_url='http://test') as nc:
+        response = await nc.post('/register/student', json=registering_student)
     assert response.status_code == 400
     assert response.json()[
         'detail'] == 'Students cannot register via /register. Use /register/student.'
