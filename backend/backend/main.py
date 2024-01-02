@@ -1,8 +1,9 @@
 from enum import Enum
+from contextlib import asynccontextmanager
 import os
 import sys
 from psycopg_pool import AsyncConnectionPool
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from dotenv import load_dotenv
 from jose import JWTError, jwt
@@ -10,7 +11,7 @@ from passlib.context import CryptContext
 from typing import Annotated, Union
 from pydantic import BaseModel
 from datetime import datetime, timedelta
-from psycopg import IntegrityError, sql
+from psycopg import IntegrityError, sql, AsyncConnection
 
 load_dotenv()
 
@@ -47,6 +48,16 @@ class RegisteringFullUser(RegisteringUser):
     phone_number: str | None = None
 
 
+class RegisteringFullUserRequest(BaseModel):
+    user: RegisteringFullUser
+    id: int
+
+
+class RegisteringStudentRequest(BaseModel):
+    user: RegisteringUser
+    administrator_id: int
+
+
 class UserInDB(User):
     hashed_password: str
 
@@ -70,18 +81,39 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token')
 
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
-app = FastAPI()
+db_pool = None
 
-if not os.getenv("DB_HOST") or not os.getenv("DB_PORT") or not os.getenv("DB_NAME") or not os.getenv("DB_USER") or not os.getenv("DB_PASSWORD"):
-    sys.exit("Could not find required database environment variables (ie. DB_HOST, DB_PORT, DB_NAME, DB_USER, or DB_PASSWORD).")
 
-conninfo = f'host={os.getenv("DB_HOST")} port={os.getenv("DB_PORT")} dbname={os.getenv("DB_NAME")} user={os.getenv("DB_USER")} password={os.getenv("DB_PASSWORD")}'
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global db_pool
+    # runs on server startup, before the application takes requests
+    if not os.getenv("DB_HOST") or not os.getenv("DB_PORT") or not os.getenv("DB_NAME") or not os.getenv("DB_USER") or not os.getenv("DB_PASSWORD"):
+        sys.exit("Could not find required database environment variables (ie. DB_HOST, DB_PORT, DB_NAME, DB_USER, or DB_PASSWORD).")
 
-db_pool = AsyncConnectionPool(
-    min_size=1,
-    max_size=10,
-    conninfo=conninfo
-)
+    conninfo = f'host={os.getenv("DB_HOST")} port={os.getenv("DB_PORT")} dbname={os.getenv("DB_NAME")} user={os.getenv("DB_USER")} password={os.getenv("DB_PASSWORD")}'
+
+    db_pool = AsyncConnectionPool(
+        min_size=1,
+        max_size=10,
+        open=False,
+        conninfo=conninfo
+    )
+
+    await db_pool.open()
+    yield
+    # runs on server shutdown
+    await db_pool.close()
+
+app = FastAPI(lifespan=lifespan)
+
+
+async def get_connection() -> AsyncConnection:
+    if db_pool is None:
+        raise ValueError('db_pool is not initialised')
+    else:
+        async with db_pool.connection() as conn:
+            yield conn
 
 
 def verify_password(plain_password, hashed_password):
@@ -92,40 +124,36 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
-async def get_user_from_username(username: str):
-    async with db_pool:
-        async with db_pool.connection() as conn:
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(f'''
+async def get_user_from_username(username: str, conn: AsyncConnection = Depends(get_connection)):
+    try:
+        async with conn.cursor() as cur:
+            cur.execute(f'''
                         select  *
                         from    account
                         where   username = {username}
                     ''')
-                    user_data = cur.fetchone()
-                    return user_data
-            except AttributeError as e:
-                raise HTTPException(
-                    status_code=500, detail=f'Couldn\'t get user via username {username}.')
+            user_data = cur.fetchone()
+            return user_data
+    except AttributeError as e:
+        raise HTTPException(
+            status_code=500, detail=f'Couldn\'t get user via username {username}.')
 
 
-async def get_user_from_email(email: str):
-    async with db_pool:
-        async with db_pool.connection() as conn:
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(f'''
+async def get_user_from_email(email: str, conn: AsyncConnection = Depends(get_connection)):
+    try:
+        async with conn.cursor() as cur:
+            cur.execute(f'''
                         select  *
                         from    account a 
                         join    FullAccount f
                         on      a.id = f.id
                         where   f.email = {email}
                     ''')
-                    user_data = cur.fetchone()
-                    return user_data
-            except AttributeError as e:
-                raise HTTPException(
-                    status_code=500, detail=f'Couldn\'t get user via email {email}.')
+            user_data = cur.fetchone()
+            return user_data
+    except AttributeError as e:
+        raise HTTPException(
+            status_code=500, detail=f'Couldn\'t get user via email {email}.')
 
 
 def authenticate_user(username: str, password: str):
@@ -191,22 +219,20 @@ async def read_items(token: Annotated[str, Depends(oauth2_scheme)]):
 
 
 @app.get('/website/{website_id}')
-async def get_website(website_id: int):
-    async with db_pool:
-        async with db_pool.connection() as conn:
-            async with conn.cursor() as cur:
-                cur.execute('''
+async def get_website(website_id: int, conn: AsyncConnection = Depends(get_connection)):
+    async with conn.cursor() as cur:
+        cur.execute('''
                     select  title
                     from    websites
                     where   id = %s
                 ''', (website_id))
-                website_data = cur.fetchone()
-                return website_data
+        website_data = cur.fetchone()
+        return website_data
 
 
 @app.post('/website')
-async def create_website(website: ProposedWebsite):
-    async with db_pool, db_pool.connection() as conn, conn.cursor() as cur:
+async def create_website(website: ProposedWebsite, conn: AsyncConnection = Depends(get_connection)):
+    async with conn.cursor() as cur:
         try:
             await cur.execute('''
                 insert into website (title)
@@ -241,8 +267,8 @@ async def create_website(website: ProposedWebsite):
 
 
 @app.post('/login')
-async def login_endpoint(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
-    user = authenticate_user(form_data.username, form_data.password)
+async def login_endpoint(user_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+    user = authenticate_user(user_data.username, user_data.password)
     if not user:
         raise HTTPException(
             status_code=400,
@@ -267,19 +293,19 @@ async def login_endpoint(form_data: Annotated[OAuth2PasswordRequestForm, Depends
 
 
 @app.post('/register/student')
-async def register_student_endpoint(form_data: RegisteringUser, administrator_id: int):
-    student_id = await create_account(form_data)
-    async with db_pool, db_pool.connection() as conn, conn.cursor() as cur:
+async def register_student_endpoint(user_data: RegisteringStudentRequest, conn: AsyncConnection = Depends(get_connection)):
+    student_id = await create_account(user_data.user)
+    async with conn.cursor() as cur:
         await cur.execute('''
             insert into Teaches (adminID, studentID)
             values (%(administrator_id)s, %(student_id)s)
-        ''', {'adminstrator_id': administrator_id, 'student_id': student_id})
+        ''', {'adminstrator_id': user_data.administrator_id, 'student_id': student_id})
         await conn.commit()
         return {'student_id': student_id}
 
 
-async def create_account(user_data: RegisteringUser):
-    async with db_pool, db_pool.connection() as conn, conn.cursor() as cur:
+async def create_account(user_data: RegisteringUser, conn: AsyncConnection = Depends(get_connection)):
+    async with conn.cursor() as cur:
         try:
             await cur.execute('''
                     insert into account (givenname, familyname, username, hashed_password)
@@ -305,41 +331,44 @@ async def create_account(user_data: RegisteringUser):
         except IntegrityError:
             raise HTTPException(
                 status_code=400, detail='User already exists.')
-        return account_id
 
 
-async def register_full_account(user_data: RegisteringFullUser, id: int):
-    async with db_pool, db_pool.connection() as conn, conn.cursor() as cur:
+async def register_full_account(user_data: RegisteringFullUserRequest, conn: AsyncConnection = Depends(get_connection)):
+    async with conn.cursor() as cur:
         await cur.execute('''
                 insert into FullAccount (id, email, phone_number)
                 values (%(id)s, %(email)s, %(phone_number)s)
-            ''', {'id': id, 'email': user_data.email, 'phone_number': user_data.phone_number})
+            ''', {'id': user_data.id, 'email': user_data.user.email, 'phone_number': user_data.user.phone_number})
         await conn.commit()
 
 
 @app.post('/register')
-async def register_full_account_endpoint(form_data: RegisteringFullUser):
-    if form_data.account_type == 'student':
+async def register_full_account_endpoint(user_data: RegisteringFullUser):
+    if user_data.account_type == 'student':
         raise HTTPException(
             status_code=400, detail='Students cannot register via /register. Use /register/student.')
     # check if user exists
     try:
-        await get_user_from_username(form_data.username)
-        await get_user_from_email(form_data.email)
+        await get_user_from_username(user_data.username)
+        await get_user_from_email(user_data.email)
         raise HTTPException(
             status_code=400, detail='User already exists.'
         )
     except HTTPException:
         # the user does not exist, proceed to create an account
         user_data: RegisteringUser = {
-            'username': form_data.username,
-            'password': get_password_hash(form_data.password),
-            'account_type': form_data.account_type,
-            'given_name': form_data.given_name,
-            'family_name': form_data.family_name,
+            'username': user_data.username,
+            'password': get_password_hash(user_data.password),
+            'account_type': user_data.account_type,
+            'given_name': user_data.given_name,
+            'family_name': user_data.family_name,
         }
-        account_id = await create_account(form_data)
-        await register_full_account(form_data, account_id)
+        account_id = await create_account(user_data)
+        request: RegisteringFullUserRequest = {
+            'user': user_data,
+            'id': account_id
+        }
+        await register_full_account(request)
     # 2. create user
     # 3. log in user
         return {'account_id': account_id}
