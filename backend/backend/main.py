@@ -109,11 +109,11 @@ app = FastAPI(lifespan=lifespan)
 
 
 async def get_connection() -> AsyncConnection:
-    if db_pool is None:
-        raise ValueError('db_pool is not initialised')
-    else:
-        async with db_pool.connection() as conn:
+    async with db_pool.connection() as conn:
+        try:
             yield conn
+        finally:
+            conn.close()
 
 
 def verify_password(plain_password, hashed_password):
@@ -294,7 +294,7 @@ async def login_endpoint(user_data: Annotated[OAuth2PasswordRequestForm, Depends
 
 @app.post('/register/student')
 async def register_student_endpoint(user_data: RegisteringStudentRequest, conn: AsyncConnection = Depends(get_connection)):
-    student_id = await create_account(user_data.user)
+    student_id = await create_account(user_data.user, conn)
     async with conn.cursor() as cur:
         await cur.execute('''
             insert into Teaches (adminID, studentID)
@@ -304,7 +304,7 @@ async def register_student_endpoint(user_data: RegisteringStudentRequest, conn: 
         return {'student_id': student_id}
 
 
-async def create_account(user_data: RegisteringUser, conn: AsyncConnection = Depends(get_connection)):
+async def create_account(user_data: RegisteringUser, conn: AsyncConnection):
     async with conn.cursor() as cur:
         try:
             await cur.execute('''
@@ -343,7 +343,7 @@ async def register_full_account(user_data: RegisteringFullUserRequest, conn: Asy
 
 
 @app.post('/register')
-async def register_full_account_endpoint(user_data: RegisteringFullUser):
+async def register_full_account_endpoint(user_data: RegisteringFullUser, conn: AsyncConnection = Depends(get_connection)):
     if user_data.account_type == 'student':
         raise HTTPException(
             status_code=400, detail='Students cannot register via /register. Use /register/student.')
@@ -363,7 +363,7 @@ async def register_full_account_endpoint(user_data: RegisteringFullUser):
             'given_name': user_data.given_name,
             'family_name': user_data.family_name,
         }
-        account_id = await create_account(user_data)
+        account_id = await create_account(user_data, conn)
         request: RegisteringFullUserRequest = {
             'user': user_data,
             'id': account_id
