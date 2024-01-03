@@ -1,17 +1,20 @@
-from enum import Enum
 from contextlib import asynccontextmanager
-import os
-import sys
-from psycopg_pool import AsyncConnectionPool
-from fastapi import Depends, FastAPI, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from datetime import datetime, timedelta
+from typing import Annotated
+
 from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from typing import Annotated, Union
-from pydantic import BaseModel
-from datetime import datetime, timedelta
-from psycopg import IntegrityError, sql, AsyncConnection, DataError
+from psycopg import DataError, IntegrityError, AsyncConnection, sql
+from psycopg_pool import AsyncConnectionPool
+
+from .models import (TokenData, ProposedWebsite, RegisteringStudentRequest,
+                     RegisteringUser, RegisteringFullUser, RegisteringFullUserRequest)
+
+import os
+import sys
 
 load_dotenv()
 
@@ -21,61 +24,6 @@ load_dotenv()
 SECRET_KEY = os.getenv('SECRET_KEY')
 ALGORITHM = 'HS256'
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-
-class StudentOrAdministrator(str, Enum):
-    student = 'student'
-    administrator = 'administrator'
-
-
-class User(BaseModel):
-    given_name: str
-    family_name: str
-    username: str
-
-
-class LoggedInUser(User):
-    account_id: int
-
-
-class RegisteringUser(User):
-    hashed_password: str
-    account_type: StudentOrAdministrator
-
-
-class RegisteringFullUser(RegisteringUser):
-    email: str
-    phone_number: str | None = None
-
-
-class RegisteringFullUserRequest(BaseModel):
-    user: RegisteringFullUser
-    id: int
-
-
-class RegisteringStudentRequest(BaseModel):
-    user: RegisteringUser
-    administrator_id: int
-
-
-class UserInDB(User):
-    hashed_password: str
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-
-class TokenData(BaseModel):
-    username: Union[str, None] = None
-
-
-class ProposedWebsite(BaseModel):
-    title: str
-    owner_type: StudentOrAdministrator
-    owner_id: int
-
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token')
 
@@ -302,7 +250,7 @@ async def register_student_endpoint(user_data: RegisteringStudentRequest, conn: 
             select *
             from   administrator
             where  id = %(administrator_id)s
-        ''', { 'administrator_id': user_data.administrator_id })
+        ''', {'administrator_id': user_data.administrator_id})
         administrator = await cur.fetchone()
         if not administrator:
             raise HTTPException(
@@ -326,7 +274,8 @@ async def register_student_endpoint(user_data: RegisteringStudentRequest, conn: 
 async def create_account(user_data: RegisteringUser, conn: AsyncConnection):
     async with conn.cursor() as cur:
         try:
-            user_data.hashed_password = get_password_hash(user_data.hashed_password)
+            user_data.hashed_password = get_password_hash(
+                user_data.hashed_password)
             await cur.execute('''
                     insert into account (givenname, familyname, username, hashed_password)
                     values (%(givenname)s, %(familyname)s, %(username)s, %(hashed_password)s)
@@ -371,7 +320,7 @@ async def register_full_account_endpoint(user_data: RegisteringFullUser, conn: A
     if user_data.account_type == 'student':
         raise HTTPException(
             status_code=400, detail='Students cannot register via /register. Use /register/student.')
-    
+
     # if either function returns a value other than None, the user exists
     if (await get_user_from_username(user_data.username) or await get_user_from_email(user_data.email)):
         raise HTTPException(
