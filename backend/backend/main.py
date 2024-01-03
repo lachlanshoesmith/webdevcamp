@@ -134,9 +134,8 @@ async def get_user_from_username(username: str, conn: AsyncConnection = Depends(
                     ''')
             user_data = cur.fetchone()
             return user_data
-    except AttributeError as e:
-        raise HTTPException(
-            status_code=500, detail=f'Couldn\'t get user via username {username}.')
+    except AttributeError:
+        return None
 
 
 async def get_user_from_email(email: str, conn: AsyncConnection = Depends(get_connection)):
@@ -152,8 +151,7 @@ async def get_user_from_email(email: str, conn: AsyncConnection = Depends(get_co
             user_data = cur.fetchone()
             return user_data
     except AttributeError as e:
-        raise HTTPException(
-            status_code=500, detail=f'Couldn\'t get user via email {email}.')
+        return None
 
 
 def authenticate_user(username: str, password: str):
@@ -294,6 +292,9 @@ async def login_endpoint(user_data: Annotated[OAuth2PasswordRequestForm, Depends
 
 @app.post('/register/student')
 async def register_student_endpoint(user_data: RegisteringStudentRequest, conn: AsyncConnection = Depends(get_connection)):
+    if user_data.user.account_type != 'student':
+        raise HTTPException(
+            status_code=400, detail='Only students may register via /register/student. Use /register.')
     # check that administrator exists
     async with conn.cursor() as cur:
         await cur.execute('''
@@ -312,18 +313,20 @@ async def register_student_endpoint(user_data: RegisteringStudentRequest, conn: 
             await cur.execute('''
                 insert into Teaches (adminID, studentID)
                 values (%(administrator_id)s, %(student_id)s)
-            ''', {'adminstrator_id': user_data.administrator_id, 'student_id': student_id})
+            ''', {'administrator_id': user_data.administrator_id, 'student_id': student_id})
             await conn.commit()
             return {'student_id': student_id}
     except Exception as e:
-        print('Error!')
-        print(e.__class__)
-        print(e)
+        raise HTTPException(
+            status_code=500, detail=str(e)
+        )
 
 
 async def create_account(user_data: RegisteringUser, conn: AsyncConnection):
     async with conn.cursor() as cur:
         try:
+            print('\n\n\n\nuser data...\n\n')
+            print(user_data)
             await cur.execute('''
                     insert into account (givenname, familyname, username, hashed_password)
                     values (%(givenname)s, %(familyname)s, %(username)s, %(hashed_password)s)
@@ -344,7 +347,7 @@ async def create_account(user_data: RegisteringUser, conn: AsyncConnection):
                     ''').format(sql.Identifier(user_data.account_type)), [account_id])
                 await conn.commit()
 
-                return { 'account_id': account_id }
+                return account_id
 
         except IntegrityError:
             raise HTTPException(
@@ -354,12 +357,12 @@ async def create_account(user_data: RegisteringUser, conn: AsyncConnection):
                 status_code=400, detail='Username is too long.')
 
 
-async def register_full_account(user_data: RegisteringFullUserRequest, conn: AsyncConnection = Depends(get_connection)):
+async def register_full_account(user_data: RegisteringFullUserRequest, conn: AsyncConnection):
     async with conn.cursor() as cur:
         await cur.execute('''
-                insert into FullAccount (id, email, phone_number)
+                insert into FullAccount (id, email, phonenumber)
                 values (%(id)s, %(email)s, %(phone_number)s)
-            ''', {'id': user_data.id, 'email': user_data.user.email, 'phone_number': user_data.user.phone_number})
+            ''', {'id': user_data['id'], 'email': user_data['user']['email'], 'phone_number': user_data['user']['phone_number']})
         await conn.commit()
 
 
@@ -368,28 +371,29 @@ async def register_full_account_endpoint(user_data: RegisteringFullUser, conn: A
     if user_data.account_type == 'student':
         raise HTTPException(
             status_code=400, detail='Students cannot register via /register. Use /register/student.')
-    # check if user exists
-    try:
-        await get_user_from_username(user_data.username)
-        await get_user_from_email(user_data.email)
+    
+    # if either function returns a value other than None, the user exists
+    if (await get_user_from_username(user_data.username) or await get_user_from_email(user_data.email)):
         raise HTTPException(
             status_code=400, detail='User already exists.'
         )
-    except HTTPException:
+    else:
         # the user does not exist, proceed to create an account
-        user_data: RegisteringUser = {
+        formatted_user_data: RegisteringFullUser = {
             'username': user_data.username,
-            'password': get_password_hash(user_data.password),
+            'hashed_password': get_password_hash(user_data.hashed_password),
             'account_type': user_data.account_type,
             'given_name': user_data.given_name,
             'family_name': user_data.family_name,
+            'email': user_data.email,
+            'phone_number': user_data.phone_number
         }
-        account_id = await create_account(user_data, conn)
+        account_id = await create_account(formatted_user_data, conn)
         request: RegisteringFullUserRequest = {
-            'user': user_data,
+            'user': formatted_user_data,
             'id': account_id
         }
-        await register_full_account(request)
+        await register_full_account(request, conn)
     # 2. create user
     # 3. log in user
         return {'account_id': account_id}
