@@ -121,6 +121,7 @@ def verify_password(plain_password, hashed_password):
 
 
 def get_password_hash(password):
+    # TODO: ADD SALT!
     return pwd_context.hash(password)
 
 
@@ -325,8 +326,7 @@ async def register_student_endpoint(user_data: RegisteringStudentRequest, conn: 
 async def create_account(user_data: RegisteringUser, conn: AsyncConnection):
     async with conn.cursor() as cur:
         try:
-            print('\n\n\n\nuser data...\n\n')
-            print(user_data)
+            user_data.hashed_password = get_password_hash(user_data.hashed_password)
             await cur.execute('''
                     insert into account (givenname, familyname, username, hashed_password)
                     values (%(givenname)s, %(familyname)s, %(username)s, %(hashed_password)s)
@@ -378,19 +378,9 @@ async def register_full_account_endpoint(user_data: RegisteringFullUser, conn: A
             status_code=400, detail='User already exists.'
         )
     else:
-        # the user does not exist, proceed to create an account
-        formatted_user_data: RegisteringFullUser = {
-            'username': user_data.username,
-            'hashed_password': get_password_hash(user_data.hashed_password),
-            'account_type': user_data.account_type,
-            'given_name': user_data.given_name,
-            'family_name': user_data.family_name,
-            'email': user_data.email,
-            'phone_number': user_data.phone_number
-        }
-        account_id = await create_account(formatted_user_data, conn)
+        account_id = await create_account(user_data, conn)
         request: RegisteringFullUserRequest = {
-            'user': formatted_user_data,
+            'user': user_data,
             'id': account_id
         }
         await register_full_account(request, conn)
