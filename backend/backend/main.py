@@ -11,7 +11,7 @@ from passlib.context import CryptContext
 from typing import Annotated, Union
 from pydantic import BaseModel
 from datetime import datetime, timedelta
-from psycopg import IntegrityError, sql, AsyncConnection
+from psycopg import IntegrityError, sql, AsyncConnection, DataError
 
 load_dotenv()
 
@@ -39,7 +39,7 @@ class LoggedInUser(User):
 
 
 class RegisteringUser(User):
-    password: str
+    hashed_password: str
     account_type: StudentOrAdministrator
 
 
@@ -113,7 +113,7 @@ async def get_connection() -> AsyncConnection:
         try:
             yield conn
         finally:
-            conn.close()
+            await conn.close()
 
 
 def verify_password(plain_password, hashed_password):
@@ -294,14 +294,31 @@ async def login_endpoint(user_data: Annotated[OAuth2PasswordRequestForm, Depends
 
 @app.post('/register/student')
 async def register_student_endpoint(user_data: RegisteringStudentRequest, conn: AsyncConnection = Depends(get_connection)):
-    student_id = await create_account(user_data.user, conn)
+    # check that administrator exists
     async with conn.cursor() as cur:
         await cur.execute('''
-            insert into Teaches (adminID, studentID)
-            values (%(administrator_id)s, %(student_id)s)
-        ''', {'adminstrator_id': user_data.administrator_id, 'student_id': student_id})
-        await conn.commit()
-        return {'student_id': student_id}
+            select *
+            from   administrator
+            where  id = %(administrator_id)s
+        ''', { 'administrator_id': user_data.administrator_id })
+        administrator = await cur.fetchone()
+        if not administrator:
+            raise HTTPException(
+                status_code=400, detail=f'Administrator {user_data.administrator_id} does not exist.')
+
+    student_id = await create_account(user_data.user, conn)
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute('''
+                insert into Teaches (adminID, studentID)
+                values (%(administrator_id)s, %(student_id)s)
+            ''', {'adminstrator_id': user_data.administrator_id, 'student_id': student_id})
+            await conn.commit()
+            return {'student_id': student_id}
+    except Exception as e:
+        print('Error!')
+        print(e.__class__)
+        print(e)
 
 
 async def create_account(user_data: RegisteringUser, conn: AsyncConnection):
@@ -315,22 +332,26 @@ async def create_account(user_data: RegisteringUser, conn: AsyncConnection):
                       'familyname': user_data.family_name,
                       'username': user_data.username,
                       'hashed_password': user_data.hashed_password})
-            await cur.commit()
+            await conn.commit()
             response = await cur.fetchone()
             account_id = response[0]
 
-            await cur.execute('''
-                    insert into %(account_type) (id)
-                    values (%(id)s);
-                ''', {'account_type': user_data.account_type,
-                      'id': account_id})
-            await cur.commit()
+            async with conn.cursor() as cur2:
+                await cur2.execute(
+                    sql.SQL('''
+                        insert into {} (id)
+                        values (%s)
+                    ''').format(sql.Identifier(user_data.account_type)), [account_id])
+                await conn.commit()
 
-            return account_id
+                return { 'account_id': account_id }
 
         except IntegrityError:
             raise HTTPException(
                 status_code=400, detail='User already exists.')
+        except DataError:
+            raise HTTPException(
+                status_code=400, detail='Username is too long.')
 
 
 async def register_full_account(user_data: RegisteringFullUserRequest, conn: AsyncConnection = Depends(get_connection)):
