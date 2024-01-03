@@ -5,13 +5,31 @@ from asgi_lifespan import LifespanManager
 from backend import main
 from .testdata import TestData as d
 
-@pytest.mark.anyio
-async def test_register_administrator(test_db):
+async def register_administrator(administrator_data = d.registering_administrator_data):
     async with LifespanManager(main.app):
         async with AsyncClient(app=main.app, base_url='http://test') as ac:
-            response = await ac.post('/register', json=d.registering_administrator_data)
+            response = await ac.post('/register', json=administrator_data)
+            return response 
+
+@pytest.mark.anyio
+async def test_register_administrator(test_db):
+    response = await register_administrator()
+    assert response.status_code == 200, response.text
+    assert 'account_id' in response.json()
+
+@pytest.mark.anyio
+async def test_register_student(test_db):
+    res = await register_administrator()
+    assert res.status_code == 200
+    
+    student = d.registering_student
+    student['administrator_id'] = res.json()['account_id']
+
+    async with LifespanManager(main.app):
+        async with AsyncClient(app=main.app, base_url='http://test') as ac:
+            response = await ac.post('/register/student', json=d.registering_student)
         assert response.status_code == 200, response.text
-        assert 'account_id' in response.json() 
+        assert 'student_id' in response.json() 
 
 @pytest.mark.anyio
 async def test_register_student_with_nonexistent_administrator(test_db):
@@ -19,8 +37,7 @@ async def test_register_student_with_nonexistent_administrator(test_db):
         async with AsyncClient(app=main.app, base_url='http://test') as ac:
             response = await ac.post('/register/student', json=d.registering_student)
         assert response.status_code == 400, response.text
-        assert response.json()[
-            'detail'] == 'Administrator 1 does not exist.'
+        assert 'does not exist' in response.json()['detail']
 
 
 @pytest.mark.anyio
