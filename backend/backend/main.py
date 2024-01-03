@@ -68,9 +68,8 @@ def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def get_password_hash(password):
-    # TODO: ADD SALT!
-    return pwd_context.hash(password)
+def get_password_hash(password, registration_time):
+    return pwd_context.hash(password + str(registration_time))
 
 
 async def get_user_from_username(username: str, conn: AsyncConnection = Depends(get_connection)):
@@ -230,15 +229,6 @@ async def login_endpoint(user_data: Annotated[OAuth2PasswordRequestForm, Depends
     return {'access_token': access_token, 'token_type': 'bearer'}
 
 
-# async def check_if_username_exists(username: str, email: str | None):
-#     user = await get_user(username)
-#     if not user:
-#         return False
-#     if not verify_password(password, user.hashed_password):
-#         return False
-#     return user
-
-
 @app.post('/register/student')
 async def register_student_endpoint(user_data: RegisteringStudentRequest, conn: AsyncConnection = Depends(get_connection)):
     if user_data.user.account_type != 'student':
@@ -274,19 +264,33 @@ async def register_student_endpoint(user_data: RegisteringStudentRequest, conn: 
 async def create_account(user_data: RegisteringUser, conn: AsyncConnection):
     async with conn.cursor() as cur:
         try:
-            user_data.hashed_password = get_password_hash(
-                user_data.hashed_password)
             await cur.execute('''
-                    insert into account (givenname, familyname, username, hashed_password)
-                    values (%(givenname)s, %(familyname)s, %(username)s, %(hashed_password)s)
-                    returning (id);
+                    insert into account (givenname, familyname, hashed_password, username)
+                    values (%(givenname)s, %(familyname)s, 'temp', %(username)s)
+                    returning id, registrationtime;
                 ''', {'givenname': user_data.given_name,
                       'familyname': user_data.family_name,
-                      'username': user_data.username,
-                      'hashed_password': user_data.hashed_password})
+                      'username': user_data.username})
+            
+            response = await cur.fetchall()
+            account_id = response[0][0]
+            registration_time = response[0][1]
+        
+            # insert hashed password now that registration time is known
+            user_data.hashed_password = get_password_hash(
+                user_data.hashed_password,
+                registration_time
+            )
+
             await conn.commit()
-            response = await cur.fetchone()
-            account_id = response[0]
+
+            await cur.execute('''
+                    update account
+                    set hashed_password = %(hashed_password)s
+                    where id = %(account_id)s
+                ''', {'account_id': account_id, 'hashed_password': user_data.hashed_password})
+            
+            await conn.commit()
 
             async with conn.cursor() as cur2:
                 await cur2.execute(
@@ -298,7 +302,8 @@ async def create_account(user_data: RegisteringUser, conn: AsyncConnection):
 
                 return account_id
 
-        except IntegrityError:
+        except IntegrityError as e:
+            print(e.diag.message_detail)
             raise HTTPException(
                 status_code=400, detail='User already exists.')
         except DataError:
@@ -311,7 +316,7 @@ async def register_full_account(user_data: RegisteringFullUserRequest, conn: Asy
         await cur.execute('''
                 insert into FullAccount (id, email, phonenumber)
                 values (%(id)s, %(email)s, %(phone_number)s)
-            ''', {'id': user_data['id'], 'email': user_data['user']['email'], 'phone_number': user_data['user']['phone_number']})
+            ''', {'id': user_data['id'], 'email': user_data['user'].email, 'phone_number': user_data['user'].phone_number})
         await conn.commit()
 
 
@@ -333,11 +338,4 @@ async def register_full_account_endpoint(user_data: RegisteringFullUser, conn: A
             'id': account_id
         }
         await register_full_account(request, conn)
-    # 2. create user
-    # 3. log in user
         return {'account_id': account_id}
-
-
-# @app.get('/users/me')
-# async def read_users_me(current_user: Annotated[FullAccount, Depends(get_current_user)]):
-#     return current_user

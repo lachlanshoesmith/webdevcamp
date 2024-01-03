@@ -34,3 +34,16 @@ class TestData:
         'email': 'neffie@gmail.com',
         'phone_number': '123-456-7890'
     }
+
+    registering_administrator_as_student: main.RegisteringUser = {
+        'username': 'lachlantula',
+        'given_name': 'Lachlan Charles',
+        'family_name': 'Shoesmith',
+        'hashed_password': 'abjjsfdjsd',
+        'account_type': 'administrator'
+    }
+
+    registering_administrator_as_student_request: main.RegisteringStudentRequest = {
+        'user': registering_administrator_as_student,
+        'administrator_id': 1
+    }

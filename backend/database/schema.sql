@@ -4,8 +4,8 @@ create table Account (
 	familyName			text					not null,
 	username			varchar(20)				not null	unique,
 	hashed_password		text					not null,
-	registrationDate	timestamp				default		current_timestamp,
-	/* salt is username + registrationDate concatenated */
+	registrationTime	timestamp				default		current_timestamp,
+	/* salt is username + registrationTime concatenated */
 	primary key	(id)
 );
 
