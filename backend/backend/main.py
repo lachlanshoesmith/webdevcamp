@@ -72,7 +72,7 @@ def get_password_hash(password, registration_time):
     return pwd_context.hash(password + str(registration_time))
 
 
-async def get_user_from_username(username: str, conn: AsyncConnection = Depends(get_connection)):
+async def get_user_from_username(username: str, conn: AsyncConnection):
     try:
         async with conn.cursor() as cur:
             cur.execute(f'''
@@ -80,13 +80,14 @@ async def get_user_from_username(username: str, conn: AsyncConnection = Depends(
                         from    account
                         where   username = {username}
                     ''')
-            user_data = cur.fetchone()
+            user_data = await cur.fetchone()
+            print('Found username: ' + str(user_data))
             return user_data
     except AttributeError:
         return None
 
 
-async def get_user_from_email(email: str, conn: AsyncConnection = Depends(get_connection)):
+async def get_user_from_email(email: str, conn: AsyncConnection):
     try:
         async with conn.cursor() as cur:
             cur.execute(f'''
@@ -96,9 +97,9 @@ async def get_user_from_email(email: str, conn: AsyncConnection = Depends(get_co
                         on      a.id = f.id
                         where   f.email = {email}
                     ''')
-            user_data = cur.fetchone()
+            user_data = await cur.fetchone()
             return user_data
-    except AttributeError as e:
+    except Exception as e:
         return None
 
 
@@ -327,7 +328,7 @@ async def register_full_account_endpoint(user_data: RegisteringFullUser, conn: A
             status_code=400, detail='Students cannot register via /register. Use /register/student.')
 
     # if either function returns a value other than None, the user exists
-    if (await get_user_from_username(user_data.username) or await get_user_from_email(user_data.email)):
+    if (await get_user_from_username(user_data.username, conn) or await get_user_from_email(user_data.email, conn)):
         raise HTTPException(
             status_code=400, detail='User already exists.'
         )

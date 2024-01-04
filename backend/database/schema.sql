@@ -1,18 +1,27 @@
+do $$ declare
+    r record;
+begin
+    for r in (select tablename from pg_tables where schemaname = 'public') loop
+        execute 'drop table if exists ' || quote_ident(r.tablename) || ' cascade';
+    end loop;
+end $$;
+
+
 create table Account (
 	id					serial,
-	givenName			text					not null,
-	familyName			text					not null,
+	given_name			text					not null,
+	family_name			text					not null,
 	username			varchar(20)				not null	unique,
 	hashed_password		text					not null,
-	registrationTime	timestamp				default		current_timestamp,
-	/* salt is username + registrationTime concatenated */
+	registration_time	timestamp				default		current_timestamp,
+	/* salt is username + registration_time concatenated */
 	primary key	(id)
 );
 
-create table FullAccount (
+create table Full_Account (
 	id					serial,
 	email				text					not null	unique,
-	phone_number		text,
+	phone_number		text					unique,
 	primary key			(id),
 	foreign key			(id)					references	Account(id)
 );
@@ -30,11 +39,11 @@ create table Administrator (
 );
 
 create table Teaches (
-	adminID				serial,
-	studentID			serial,
-	foreign key			(adminID)				references	Administrator(id),
-	foreign key			(studentID)				references	Student(id),
-	primary key			(adminID, studentID)
+	admin_id				serial,
+	student_id			serial,
+	foreign key			(admin_id)				references	Administrator(id),
+	foreign key			(student_id)				references	Student(id),
+	primary key			(admin_id, student_id)
 );
 
 create table Guardian (
@@ -43,12 +52,12 @@ create table Guardian (
 	foreign key			(id)					references	Account(id)
 );
 
-create table HasChild (
-	studentID			serial,
-	guardianID			serial,
-	foreign key			(studentID)				references	Student(id),
-	foreign key			(guardianID)			references	Guardian(id),
-	primary key			(studentID, guardianID)
+create table Has_Child (
+	student_id			serial,
+	guardian_id			serial,
+	foreign key			(student_id)				references	Student(id),
+	foreign key			(guardian_id)			references	Guardian(id),
+	primary key			(student_id, guardian_id)
 );
 
 create table Viewer (
@@ -58,17 +67,17 @@ create table Viewer (
 );
 
 create table Friendship (
-	studentID			serial,
-	friendID			serial,
-	foreign key			(studentID)				references	Student(id),
-	foreign key			(friendID)				references	Account(id),
-	primary key			(studentID, friendID)
+	student_id			serial,
+	friend_id			serial,
+	foreign key			(student_id)				references	Student(id),
+	foreign key			(friend_id)				references	Account(id),
+	primary key			(student_id, friend_id)
 );
 
 /* a student may be friends with either another student or a viewer */
-create function checkFriendship() returns trigger as $$
+create or replace function check_friendship() returns trigger as $$
 begin
-	if new.friendID in (select id from Student) or (select id from Viewer) then
+	if new.friend_id in (select id from Student) or (select id from Viewer) then
 		return new;
 	else
 		raise exception 'Friend must be either a student or a viewer';
@@ -76,7 +85,7 @@ begin
 end;
 $$ language plpgsql;
 
-create trigger checkFriendship before insert or update on Friendship for each row execute procedure checkFriendship();
+create or replace trigger check_friendship before insert or update on Friendship for each row execute procedure check_friendship();
 
 create table Website (
 	id					serial,
@@ -86,42 +95,42 @@ create table Website (
 
 create table Webpage (
 	id					serial,
-	websiteID			serial,
+	website_id			serial,
 	title				text					not null,
 	filename			text					not null,
 	-- url to HTML file
 	contents			text					not null,
 	primary key			(id),
-	foreign key			(websiteID)				references	Website(id)
+	foreign key			(website_id)				references	Website(id)
 );
 
-create table AdministratorOwnsWebsite (
-    administratorID		serial,
-    websiteID 			serial,
-    foreign key 		(administratorID)		references Administrator(id),
-    foreign key			(websiteID)				references Website(id),
-    primary key			(administratorID, websiteID)
+create table Administrator_Owns_Website (
+    admin_id		serial,
+    website_id 			serial,
+    foreign key 		(admin_id)		references Administrator(id),
+    foreign key			(website_id)				references Website(id),
+    primary key			(admin_id, website_id)
 );
 
-create table StudentOwnsWebsite (
-	studentID			serial,
-	websiteID			serial,
-	foreign key			(studentID)				references	Student(id),
-	foreign key			(websiteID)				references	Website(id),
-	primary key			(studentID, websiteID)
+create table Student_Owns_Website (
+	student_id			serial,
+	website_id			serial,
+	foreign key			(student_id)				references	Student(id),
+	foreign key			(website_id)				references	Website(id),
+	primary key			(student_id, website_id)
 );
 
-create table CanViewWebsite (
-	accountID			serial,
-	websiteID			serial,
-	foreign key			(accountID)				references	Account(id),
-	foreign key			(websiteID)				references	Website(id),
-	primary key			(accountID, websiteID)
+create table Can_View_Website (
+	account_id			serial,
+	website_id			serial,
+	foreign key			(account_id)				references	Account(id),
+	foreign key			(website_id)				references	Website(id),
+	primary key			(account_id, website_id)
 );
 
-create function checkViewerOfWebsite() returns trigger as $$
+create or replace function check_viewer_of_website() returns trigger as $$
 begin
-	if new.accountID in (select id from Viewer) or (select id from Guardian) then
+	if new.account_id in (select id from Viewer) or (select id from Guardian) then
 		return new;
 	else
 		raise exception 'Additional viewers of a website must be either a guardian or a viewer';
@@ -129,4 +138,46 @@ begin
 end;
 $$ language plpgsql;
 
-create trigger checkViewerOfWebsite before insert or update on CanViewWebsite for each row execute procedure checkViewerOfWebsite();
+create type Full_Account_Type as (id integer, email text, phone_number text, given_name text, family_name text, username text, registration_time timestamp);
+
+create or replace function get_user_from_email(provided_email text) returns setof Full_Account_Type as $$
+begin
+	if exists (select * from Full_Account where email = provided_email) then
+		return query (
+			select f.id, f.email, f.phone_number, a.given_name, a.family_name, a.username, a.registration_time
+			from Full_Account f
+			join Account a
+			on f.id = a.id
+			where email = provided_email
+		);
+	end if;
+	/* if not found */
+	return next null;
+end;
+$$ language plpgsql;
+
+
+create or replace function get_user_from_username(provided_username text) returns setof Full_Account_Type as $$
+begin
+	if exists (select 1 from Full_Account where username = provided_username) then
+		return query (
+			select f.id, f.email, f.phone_number, a.given_name, a.family_name, a.username, a.registration_time
+			from Full_Account f
+			join Account a
+			on f.id = a.id
+			where username = provided_username
+		);
+	elsif exists (select 1 from Account where username = provided_username) then 
+		return query (
+			select id, given_name, family_name, username, registration_time
+			from Account a
+			where username = provided_username
+		);
+	end if;
+	/* if not found */
+	return next null;
+end;
+$$ language plpgsql;
+
+
+create or replace trigger check_viewer_of_website before insert or update on Can_View_Website for each row execute procedure check_viewer_of_website();

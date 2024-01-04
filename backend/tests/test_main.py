@@ -13,6 +13,32 @@ async def test_register_administrator(test_db):
     assert 'account_id' in res.json()
 
 @pytest.mark.anyio
+async def test_register_administrator_with_same_username(test_db):
+    res = await register_administrator()
+    assert res.status_code == 200
+    
+    administrator = deepcopy(d.registering_administrator_data)
+    administrator['email'] = 'different_example@gmail.com'
+    administrator['family_name'] = 'Example'
+
+    res = await register_administrator(administrator)
+    assert res.status_code == 400, res.text
+    assert res.json()['detail'] == 'User already exists.'
+
+@pytest.mark.anyio
+async def test_register_administrator_with_same_email(test_db):
+    res = await register_administrator()
+    assert res.status_code == 200
+    
+    administrator = deepcopy(d.registering_administrator_data)
+    administrator['username'] = 'different_username'
+    administrator['family_name'] = 'Example'
+
+    res = await register_administrator(administrator)
+    assert res.status_code == 400, res.text
+    assert res.json()['detail'] == 'User already exists.'
+
+@pytest.mark.anyio
 async def test_register_student(test_db):
     res = await register_administrator()
     assert res.status_code == 200
@@ -23,6 +49,26 @@ async def test_register_student(test_db):
     res = await register_student(student)
     assert res.status_code == 200, res.text
     assert 'student_id' in res.json() 
+
+@pytest.mark.anyio
+async def test_register_student_with_same_username(test_db):
+    res = await register_administrator()
+    assert res.status_code == 200
+    
+    student = deepcopy(d.registering_student)
+    student['administrator_id'] = res.json()['account_id']
+
+    res = await register_student(student)
+    assert res.status_code == 200, res.text
+
+    # change some things, but not username
+    student['user']['given_name'] = 'Example'
+    student['user']['family_name'] = 'Example'
+
+    res = await register_student(student)
+    assert res.status_code == 400, res.text
+    assert res.json()['detail'] == 'User already exists.'
+
 
 @pytest.mark.anyio
 async def test_register_student_with_nonexistent_administrator(test_db):
