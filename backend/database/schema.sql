@@ -39,11 +39,11 @@ create table Administrator (
 );
 
 create table Teaches (
-	admin_id				serial,
+	administrator_id				serial,
 	student_id			serial,
-	foreign key			(admin_id)				references	Administrator(id),
+	foreign key			(administrator_id)				references	Administrator(id),
 	foreign key			(student_id)				references	Student(id),
-	primary key			(admin_id, student_id)
+	primary key			(administrator_id, student_id)
 );
 
 create table Guardian (
@@ -105,11 +105,11 @@ create table Webpage (
 );
 
 create table Administrator_Owns_Website (
-    admin_id		serial,
+    administrator_id		serial,
     website_id 			serial,
-    foreign key 		(admin_id)		references Administrator(id),
+    foreign key 		(administrator_id)		references Administrator(id),
     foreign key			(website_id)				references Website(id),
-    primary key			(admin_id, website_id)
+    primary key			(administrator_id, website_id)
 );
 
 create table Student_Owns_Website (
@@ -138,28 +138,25 @@ begin
 end;
 $$ language plpgsql;
 
-create type Full_Account_Type as (id integer, email text, phone_number text, given_name text, family_name text, username text, registration_time timestamp);
+drop type Full_Account_Type cascade;
+create type Full_Account_Type as (id integer, email text, phone_number text, given_name text, family_name text, username varchar(20), registration_time timestamp);
 
 create or replace function get_user_from_email(provided_email text) returns setof Full_Account_Type as $$
 begin
-	if exists (select * from Full_Account where email = provided_email) then
-		return query (
-			select f.id, f.email, f.phone_number, a.given_name, a.family_name, a.username, a.registration_time
-			from Full_Account f
-			join Account a
-			on f.id = a.id
-			where email = provided_email
-		);
-	end if;
-	/* if not found */
-	return next null;
+	return query (
+		select f.id, f.email, f.phone_number, a.given_name, a.family_name, a.username, a.registration_time
+		from Full_Account f
+		join Account a
+		on f.id = a.id
+		where email = provided_email
+	);
 end;
 $$ language plpgsql;
 
 
 create or replace function get_user_from_username(provided_username text) returns setof Full_Account_Type as $$
 begin
-	if exists (select 1 from Full_Account where username = provided_username) then
+	if exists (select 1 from Full_Account f join Account a on f.id = a.id where a.username = provided_username) then
 		return query (
 			select f.id, f.email, f.phone_number, a.given_name, a.family_name, a.username, a.registration_time
 			from Full_Account f
@@ -174,8 +171,6 @@ begin
 			where username = provided_username
 		);
 	end if;
-	/* if not found */
-	return next null;
 end;
 $$ language plpgsql;
 

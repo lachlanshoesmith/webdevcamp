@@ -73,34 +73,27 @@ def get_password_hash(password, registration_time):
 
 
 async def get_user_from_username(username: str, conn: AsyncConnection):
-    try:
-        async with conn.cursor() as cur:
-            cur.execute(f'''
-                        select  *
-                        from    account
-                        where   username = {username}
-                    ''')
-            user_data = await cur.fetchone()
-            print('Found username: ' + str(user_data))
+    async with conn.cursor() as cur:
+        await cur.execute('''
+                        select get_user_from_username(%(username)s)
+                    ''', {'username': username})
+        user_data = await cur.fetchone()
+        if not user_data:
+            return None
+        else:
             return user_data
-    except AttributeError:
-        return None
 
 
 async def get_user_from_email(email: str, conn: AsyncConnection):
-    try:
-        async with conn.cursor() as cur:
-            cur.execute(f'''
-                        select  *
-                        from    account a 
-                        join    FullAccount f
-                        on      a.id = f.id
-                        where   f.email = {email}
-                    ''')
-            user_data = await cur.fetchone()
+    async with conn.cursor() as cur:
+        await cur.execute('''
+                        select get_user_from_email(%(email)s)
+                    ''', {'email': email})
+        user_data = await cur.fetchone()
+        if not user_data:
+            return None
+        else:
             return user_data
-    except Exception as e:
-        return None
 
 
 def authenticate_user(username: str, password: str):
@@ -251,7 +244,7 @@ async def register_student_endpoint(user_data: RegisteringStudentRequest, conn: 
     try:
         async with conn.cursor() as cur:
             await cur.execute('''
-                insert into Teaches (adminID, studentID)
+                insert into Teaches (administrator_id, student_id)
                 values (%(administrator_id)s, %(student_id)s)
             ''', {'administrator_id': user_data.administrator_id, 'student_id': student_id})
             await conn.commit()
@@ -266,17 +259,17 @@ async def create_account(user_data: RegisteringUser, conn: AsyncConnection):
     async with conn.cursor() as cur:
         try:
             await cur.execute('''
-                    insert into account (givenname, familyname, hashed_password, username)
-                    values (%(givenname)s, %(familyname)s, 'temp', %(username)s)
-                    returning id, registrationtime;
-                ''', {'givenname': user_data.given_name,
-                      'familyname': user_data.family_name,
+                    insert into account (given_name, family_name, hashed_password, username)
+                    values (%(given_name)s, %(family_name)s, 'temp', %(username)s)
+                    returning id, registration_time;
+                ''', {'given_name': user_data.given_name,
+                      'family_name': user_data.family_name,
                       'username': user_data.username})
-            
+
             response = await cur.fetchall()
             account_id = response[0][0]
             registration_time = response[0][1]
-        
+
             # insert hashed password now that registration time is known
             user_data.hashed_password = get_password_hash(
                 user_data.hashed_password,
@@ -290,7 +283,7 @@ async def create_account(user_data: RegisteringUser, conn: AsyncConnection):
                     set hashed_password = %(hashed_password)s
                     where id = %(account_id)s
                 ''', {'account_id': account_id, 'hashed_password': user_data.hashed_password})
-            
+
             await conn.commit()
 
             async with conn.cursor() as cur2:
@@ -315,7 +308,7 @@ async def create_account(user_data: RegisteringUser, conn: AsyncConnection):
 async def register_full_account(user_data: RegisteringFullUserRequest, conn: AsyncConnection):
     async with conn.cursor() as cur:
         await cur.execute('''
-                insert into FullAccount (id, email, phonenumber)
+                insert into Full_Account (id, email, phone_number)
                 values (%(id)s, %(email)s, %(phone_number)s)
             ''', {'id': user_data['id'], 'email': user_data['user'].email, 'phone_number': user_data['user'].phone_number})
         await conn.commit()
