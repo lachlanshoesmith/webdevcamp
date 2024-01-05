@@ -25,6 +25,7 @@ pytest = "^7.4.3"
 pytest-asyncio = "^0.23.3"
 pytest-trio = "^0.8.0"
 asgi-lifespan = "^2.1.0"
+pytest-cov = "^4.1.0"
 
 [build-system]
 requires = ["poetry-core"]
