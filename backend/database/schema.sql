@@ -139,12 +139,12 @@ end;
 $$ language plpgsql;
 
 drop type Full_Account_Type cascade;
-create type Full_Account_Type as (id integer, email text, phone_number text, given_name text, family_name text, username varchar(20), registration_time timestamp);
+create type Full_Account_Type as (id integer, email text, phone_number text, given_name text, family_name text, username varchar(20), registration_time timestamp, hashed_password text);
 
 create or replace function get_user_from_email(provided_email text) returns setof Full_Account_Type as $$
 begin
 	return query (
-		select f.id, f.email, f.phone_number, a.given_name, a.family_name, a.username, a.registration_time
+		select f.id, f.email, f.phone_number, a.given_name, a.family_name, a.username, a.registration_time, a.hashed_password
 		from Full_Account f
 		join Account a
 		on f.id = a.id
@@ -158,7 +158,7 @@ create or replace function get_user_from_username(provided_username text) return
 begin
 	if exists (select 1 from Full_Account f join Account a on f.id = a.id where a.username = provided_username) then
 		return query (
-			select f.id, f.email, f.phone_number, a.given_name, a.family_name, a.username, a.registration_time
+			select f.id, f.email, f.phone_number, a.given_name, a.family_name, a.username, a.registration_time, a.hashed_password
 			from Full_Account f
 			join Account a
 			on f.id = a.id
@@ -166,7 +166,7 @@ begin
 		);
 	elsif exists (select 1 from Account where username = provided_username) then 
 		return query (
-			select id, given_name, family_name, username, registration_time
+			select id, given_name, family_name, username, registration_time, hashed_password
 			from Account a
 			where username = provided_username
 		);

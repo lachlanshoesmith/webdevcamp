@@ -3,7 +3,7 @@ from httpx import AsyncClient
 from copy import deepcopy
 from backend import main
 from .testdata import TestData as d
-from .testhelpers import register_administrator, register_student
+from .testhelpers import register_administrator, register_student, login
 
 
 @pytest.mark.anyio
@@ -76,7 +76,7 @@ async def test_register_student_with_same_username(test_db):
 
 @pytest.mark.anyio
 async def test_register_student_with_nonexistent_administrator(test_db):
-    res = register_student(d.registering_student)
+    res = await register_student(d.registering_student)
     assert res.status_code == 400, res.text
     assert 'does not exist' in res.json()['detail']
 
@@ -168,7 +168,7 @@ async def test_register_student_without_names(test_db):
 
 @pytest.mark.anyio
 async def test_register_student_without_data(test_db):
-    res = register_student({})
+    res = await register_student({})
     assert res.status_code == 422, res.text
 
 
@@ -181,14 +181,14 @@ async def test_register_student_with_long_username(test_db):
     student['administrator_id'] = res.json()['account_id']
     student['user']['username'] = 'abcabcabcabcabcabcabcabc'
 
-    res = register_student(student)
+    res = await register_student(student)
     assert res.status_code == 400, res.text
     assert res.json()['detail'] == 'Username is too long.'
 
 
 @pytest.mark.anyio
 async def test_register_administrator_at_incorrect_endpoint_with_incorrect_data_model(test_db):
-    res = register_student(d.registering_administrator_as_student_request)
+    res = await register_student(d.registering_administrator_as_student_request)
     assert res.status_code == 400, res.text
     assert res.json()[
         'detail'] == 'Only students may register via /register/student. Use /register.'
@@ -266,3 +266,14 @@ async def test_register_student_with_incorrect_types(test_db):
 
     res = await register_student(student)
     assert res.status_code == 422, res.text
+
+
+@pytest.mark.anyio
+async def test_login_administrator(test_db):
+    res = await register_administrator()
+    assert res.status_code == 200
+
+    res = await login(d.logging_in_administrator)
+
+    assert res.status_code == 200
+    print(res.json())

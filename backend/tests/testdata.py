@@ -47,3 +47,8 @@ class TestData:
         'user': registering_administrator_as_student,
         'administrator_id': 1
     }
+
+    logging_in_administrator: main.LoggingInUser = {
+        'username': 'lachlantula',
+        'password': 'abjjsfdjsd'
+    }

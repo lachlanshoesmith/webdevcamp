@@ -1,6 +1,8 @@
+from datetime import datetime
 from pydantic import BaseModel
 from enum import Enum
 from typing import Union
+
 
 class StudentOrAdministrator(str, Enum):
     student = 'student'
@@ -15,11 +17,17 @@ class User(BaseModel):
 
 class LoggedInUser(User):
     account_id: int
+    access_token: str
 
 
 class RegisteringUser(User):
     hashed_password: str
     account_type: StudentOrAdministrator
+
+
+class LoggingInUser(BaseModel):
+    username: str
+    password: str
 
 
 class RegisteringFullUser(RegisteringUser):
@@ -38,7 +46,9 @@ class RegisteringStudentRequest(BaseModel):
 
 
 class UserInDB(User):
+    account_id: int
     hashed_password: str
+    registration_time: datetime
 
 
 class Token(BaseModel):

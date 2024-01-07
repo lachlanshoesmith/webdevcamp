@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Optional
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -11,7 +11,8 @@ from psycopg import DataError, IntegrityError, AsyncConnection, sql
 from psycopg_pool import AsyncConnectionPool
 
 from .models import (TokenData, ProposedWebsite, RegisteringStudentRequest,
-                     RegisteringUser, RegisteringFullUser, RegisteringFullUserRequest)
+                     RegisteringUser, RegisteringFullUser, RegisteringFullUserRequest,
+                     LoggingInUser, UserInDB, LoggedInUser)
 
 import os
 import sys
@@ -64,43 +65,53 @@ async def get_connection() -> AsyncConnection:
             await conn.close()
 
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+def verify_password(plain_password, hashed_password, registration_time):
+    return pwd_context.verify(plain_password + str(registration_time), hashed_password)
 
 
 def get_password_hash(password, registration_time):
     return pwd_context.hash(password + str(registration_time))
 
 
-async def get_user_from_username(username: str, conn: AsyncConnection):
+async def get_user_from_username(username: str, conn: AsyncConnection) -> Optional[UserInDB]:
     async with conn.cursor() as cur:
         await cur.execute('''
-                        select get_user_from_username(%(username)s)
+                        select * from get_user_from_username(%(username)s)
                     ''', {'username': username})
         user_data = await cur.fetchone()
         if not user_data:
             return None
         else:
-            return user_data
+            formatted_user_data: UserInDB = {
+                'account_id': user_data[0],
+                'email': user_data[1],
+                'phone_number': user_data[2],
+                'given_name': user_data[3],
+                'family_name': user_data[4],
+                'username': user_data[5],
+                'registration_time': user_data[6],
+                'hashed_password': user_data[7]
+            }
+            return formatted_user_data
 
 
-async def get_user_from_email(email: str, conn: AsyncConnection):
+async def get_user_from_email(email: str, conn: AsyncConnection) -> Optional[UserInDB]:
     async with conn.cursor() as cur:
         await cur.execute('''
                         select get_user_from_email(%(email)s)
                     ''', {'email': email})
-        user_data = await cur.fetchone()
+        user_data: UserInDB = await cur.fetchone()
         if not user_data:
             return None
         else:
             return user_data
 
 
-def authenticate_user(username: str, password: str):
-    user = get_user_from_username(username)
+async def authenticate_user(username: str, password: str, conn: AsyncConnection):
+    user: UserInDB = await get_user_from_username(username, conn)
     if not user:
-        return False
-    if not verify_password(password, user.hashed_password):
+        return None
+    if not verify_password(password, user['hashed_password'], user['registration_time']):
         return False
     return user
 
@@ -207,20 +218,33 @@ async def create_website(website: ProposedWebsite, conn: AsyncConnection = Depen
 
 
 @app.post('/login')
-async def login_endpoint(user_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
-    user = authenticate_user(user_data.username, user_data.password)
+async def login_endpoint(user_data: LoggingInUser, conn: AsyncConnection = Depends(get_connection)) -> LoggedInUser:
+    """
+    Logs in a user - either a student or administrator - and returns an access token.
+
+    Parameters:
+        LoggingInUser: The user data containing the username and password.
+
+    Returns:
+        LoggedInUser: A dictionary containing the access token and the user's ID.
+    """
+    user: UserInDB = await authenticate_user(user_data.username, user_data.password, conn)
+
     if not user:
         raise HTTPException(
             status_code=400,
             detail='Incorrect username or password',
             headers={'WWW-Authenticate': 'Bearer'}
         )
+
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={'sub': user.username},
+
+    access_token: str = create_access_token(
+        data={'sub': user['username']},
         expires_delta=access_token_expires
     )
-    return {'access_token': access_token, 'token_type': 'bearer'}
+
+    return {'account_id': user['account_id'], 'access_token': access_token, 'username': user['username'], 'given_name': user['given_name'], 'family_name': user['family_name']}
 
 
 @app.post('/register/student')
