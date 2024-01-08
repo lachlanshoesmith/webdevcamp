@@ -330,3 +330,30 @@ async def test_login_student_with_incorrect_password(test_db):
 async def test_login_empty_data(test_db):
     res = await login({})
     assert res.status_code == 422, res.text
+
+
+@pytest.mark.anyio
+async def test_login_student_with_incorrect_structure(test_db):
+    res = await register_administrator()
+    assert res.status_code == 200
+
+    student = deepcopy(d.registering_student)
+    student['administrator_id'] = res.json()['account_id']
+
+    # just returns a student id, obviously not right
+    res = await register_student(student)
+    assert res.status_code == 200, res.text
+
+    res = await login(res.json())
+    assert res.status_code == 422, res.text
+
+@pytest.mark.anyio
+async def test_login_administrator_with_incorrect_structure(test_db):
+    res = await register_administrator()
+    assert res.status_code == 200
+
+    # res.json() is an object containing account_id
+    # this is incorrect - login requires a username and password
+    res = await login(res.json())
+
+    assert res.status_code == 422, res.text
