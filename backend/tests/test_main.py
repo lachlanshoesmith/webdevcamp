@@ -275,5 +275,58 @@ async def test_login_administrator(test_db):
 
     res = await login(d.logging_in_administrator)
 
+    assert res.status_code == 200, res.text
+
+    assert res.json()['email'] == 'lachie@example.com'
+    assert res.json()['phone_number'] == '123-456-7890'
+
+@pytest.mark.anyio
+async def test_login_administrator_with_incorrect_password(test_db):
+    res = await register_administrator()
     assert res.status_code == 200
-    print(res.json())
+
+    administrator = deepcopy(d.logging_in_administrator)
+    administrator['password'] = 'wrong_password'
+
+    res = await login(administrator)
+
+    assert res.status_code == 400, res.text
+
+@pytest.mark.anyio
+async def test_login_student(test_db):
+    res = await register_administrator()
+    assert res.status_code == 200
+
+    student = deepcopy(d.registering_student)
+    student['administrator_id'] = res.json()['account_id']
+
+    res = await register_student(student)
+    assert res.status_code == 200, res.text
+    
+    res = await login(d.logging_in_student)
+    assert res.status_code == 200, res.text
+    assert res.json()['email'] == None
+    assert res.json()['phone_number'] == None
+
+@pytest.mark.anyio
+async def test_login_student_with_incorrect_password(test_db):
+    res = await register_administrator()
+    assert res.status_code == 200
+
+    student = deepcopy(d.registering_student)
+    student['administrator_id'] = res.json()['account_id']
+
+    res = await register_student(student)
+    assert res.status_code == 200, res.text
+    
+    res = await login({
+        'username': student['user']['username'],
+        'password': 'wrong_password'
+    })
+    assert res.status_code == 400, res.text
+
+
+@pytest.mark.anyio
+async def test_login_empty_data(test_db):
+    res = await login({})
+    assert res.status_code == 422, res.text

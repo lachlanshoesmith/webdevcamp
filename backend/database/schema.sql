@@ -166,7 +166,7 @@ begin
 		);
 	elsif exists (select 1 from Account where username = provided_username) then 
 		return query (
-			select id, given_name, family_name, username, registration_time, hashed_password
+			select a.id, null::text as email, null::text as phone_number, a.given_name, a.family_name, a.username, a.registration_time, a.hashed_password
 			from Account a
 			where username = provided_username
 		);

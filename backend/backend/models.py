@@ -18,6 +18,9 @@ class User(BaseModel):
 class LoggedInUser(User):
     account_id: int
     access_token: str
+    # following fields depend on account_type
+    email: str | None = None
+    phone_number: str | None = None
 
 
 class RegisteringUser(User):
@@ -49,6 +52,9 @@ class UserInDB(User):
     account_id: int
     hashed_password: str
     registration_time: datetime
+    # following fields depend on account_type
+    email: str | None = None
+    phone_number: str | None = None
 
 
 class Token(BaseModel):

@@ -65,11 +65,12 @@ async def get_connection() -> AsyncConnection:
             await conn.close()
 
 
-def verify_password(plain_password, hashed_password, registration_time):
-    return pwd_context.verify(plain_password + str(registration_time), hashed_password)
+def verify_password(plain_password: str, hashed_password, registration_time: datetime):
+    salted_password = plain_password + str(registration_time)
+    return pwd_context.verify(salted_password, hashed_password)
 
 
-def get_password_hash(password, registration_time):
+def get_password_hash(password, registration_time: datetime):
     return pwd_context.hash(password + str(registration_time))
 
 
@@ -84,14 +85,17 @@ async def get_user_from_username(username: str, conn: AsyncConnection) -> Option
         else:
             formatted_user_data: UserInDB = {
                 'account_id': user_data[0],
-                'email': user_data[1],
-                'phone_number': user_data[2],
                 'given_name': user_data[3],
                 'family_name': user_data[4],
                 'username': user_data[5],
                 'registration_time': user_data[6],
-                'hashed_password': user_data[7]
+                'hashed_password': user_data[7],
+                'email': None,
+                'phone_number': None
             }
+            if user_data[1]:
+                formatted_user_data['email'] = user_data[1]
+                formatted_user_data['phone_number'] = user_data[2]
             return formatted_user_data
 
 
@@ -244,7 +248,7 @@ async def login_endpoint(user_data: LoggingInUser, conn: AsyncConnection = Depen
         expires_delta=access_token_expires
     )
 
-    return {'account_id': user['account_id'], 'access_token': access_token, 'username': user['username'], 'given_name': user['given_name'], 'family_name': user['family_name']}
+    return {'account_id': user['account_id'], 'access_token': access_token, 'username': user['username'], 'given_name': user['given_name'], 'family_name': user['family_name'], 'email': user['email'], 'phone_number': user['phone_number']}
 
 
 @app.post('/register/student')
@@ -292,7 +296,7 @@ async def create_account(user_data: RegisteringUser, conn: AsyncConnection):
 
             response = await cur.fetchall()
             account_id = response[0][0]
-            registration_time = response[0][1]
+            registration_time: datetime = response[0][1]
 
             # insert hashed password now that registration time is known
             user_data.hashed_password = get_password_hash(
@@ -321,7 +325,6 @@ async def create_account(user_data: RegisteringUser, conn: AsyncConnection):
                 return account_id
 
         except IntegrityError as e:
-            print(e.diag.message_detail)
             raise HTTPException(
                 status_code=400, detail='User already exists.')
         except DataError:

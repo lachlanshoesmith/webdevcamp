@@ -52,3 +52,8 @@ class TestData:
         'username': 'lachlantula',
         'password': 'abjjsfdjsd'
     }
+
+    logging_in_student: main.LoggingInUser = {
+        'username': 'neffieta',
+        'password': 'password123'
+    }
