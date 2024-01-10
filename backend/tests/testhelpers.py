@@ -23,3 +23,17 @@ async def login(user_data: models.LoggingInUser):
         async with AsyncClient(app=main.app, base_url='http://test') as ac:
             res = await ac.post('/login', json=user_data)
             return res
+
+
+async def create_website(user_data=models.ProposedWebsite):
+    async with LifespanManager(main.app):
+        async with AsyncClient(app=main.app, base_url='http://test') as ac:
+            res = await ac.post('/website', json=user_data)
+            return res
+
+
+async def upload_webpage(website_id: int, webpage_file):
+    async with LifespanManager(main.app):
+        async with AsyncClient(app=main.app, base_url='http://test') as ac:
+            res = await ac.post('/website/' + str(website_id), files=webpage_file)
+            return res

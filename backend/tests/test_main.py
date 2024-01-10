@@ -3,7 +3,7 @@ from httpx import AsyncClient
 from copy import deepcopy
 from backend import main
 from .testdata import TestData as d
-from .testhelpers import register_administrator, register_student, login
+from .testhelpers import register_administrator, register_student, login, create_website, upload_webpage
 
 
 @pytest.mark.anyio
@@ -280,6 +280,7 @@ async def test_login_administrator(test_db):
     assert res.json()['email'] == 'lachie@example.com'
     assert res.json()['phone_number'] == '123-456-7890'
 
+
 @pytest.mark.anyio
 async def test_login_administrator_with_incorrect_password(test_db):
     res = await register_administrator()
@@ -292,6 +293,7 @@ async def test_login_administrator_with_incorrect_password(test_db):
 
     assert res.status_code == 400, res.text
 
+
 @pytest.mark.anyio
 async def test_login_student(test_db):
     res = await register_administrator()
@@ -302,11 +304,12 @@ async def test_login_student(test_db):
 
     res = await register_student(student)
     assert res.status_code == 200, res.text
-    
+
     res = await login(d.logging_in_student)
     assert res.status_code == 200, res.text
     assert res.json()['email'] == None
     assert res.json()['phone_number'] == None
+
 
 @pytest.mark.anyio
 async def test_login_student_with_incorrect_password(test_db):
@@ -318,7 +321,7 @@ async def test_login_student_with_incorrect_password(test_db):
 
     res = await register_student(student)
     assert res.status_code == 200, res.text
-    
+
     res = await login({
         'username': student['user']['username'],
         'password': 'wrong_password'
@@ -347,6 +350,7 @@ async def test_login_student_with_incorrect_structure(test_db):
     res = await login(res.json())
     assert res.status_code == 422, res.text
 
+
 @pytest.mark.anyio
 async def test_login_administrator_with_incorrect_structure(test_db):
     res = await register_administrator()
@@ -357,3 +361,33 @@ async def test_login_administrator_with_incorrect_structure(test_db):
     res = await login(res.json())
 
     assert res.status_code == 422, res.text
+
+
+@pytest.mark.anyio
+async def test_create_website(test_db):
+    await register_administrator()
+    await register_student()
+    res = await create_website()
+
+    assert res.status_code == 200, res.text
+    assert 'website_id' in res.json()
+
+
+@pytest.mark.anyio
+async def test_upload_webpage(test_db):
+    res = await register_administrator()
+    res = await register_student()
+
+    with open('assets/sample.css', 'rb') as file_data:
+        # res = requests.post(
+        #     'https://syd.storage.bunnycdn.com',
+        #     headers={
+        #         'AccessKey': 'ACCESS KEY GOES HERE',
+        #         'Content-Type': 'application/octet-stream',
+        #         'accept': 'application/json'
+        #     },
+        #     data=file_data
+        # )
+        files = {'website': file_data}
+        res = await upload_webpage(d.proposed_website, files)
+        assert res.status_code == 200, res.text

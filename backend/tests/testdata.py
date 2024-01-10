@@ -57,3 +57,9 @@ class TestData:
         'username': 'neffieta',
         'password': 'password123'
     }
+
+    proposed_website: main.ProposedWebsite = {
+        'title': 'My Website',
+        'owner_type': 'administrator',
+        'owner_id': 2,
+    }
