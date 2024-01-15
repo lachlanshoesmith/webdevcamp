@@ -68,4 +68,3 @@ class TokenData(BaseModel):
 
 class ProposedWebsite(BaseModel):
     title: str
-    owner_id: int

@@ -365,9 +365,20 @@ async def test_login_administrator_with_incorrect_structure(test_db):
 
 @pytest.mark.anyio
 async def test_create_website(test_db):
-    await register_administrator()
-    await register_student()
-    res = await create_website()
+    administrator = await register_administrator()
+    assert administrator.status_code == 200
+
+    student_data = deepcopy(d.registering_student)
+    student_data['administrator_id'] = administrator.json()['account_id']
+
+    student = await register_student(student_data)
+
+    res = await login(d.logging_in_student)
+    assert res.status_code == 200
+
+    logged_in_student = res.json()['access_token']
+
+    res = await create_website(logged_in_student, d.proposed_website)
 
     assert res.status_code == 200, res.text
     assert 'website_id' in res.json()
@@ -378,16 +389,7 @@ async def test_upload_webpage(test_db):
     res = await register_administrator()
     res = await register_student()
 
-    with open('assets/sample.css', 'rb') as file_data:
-        # res = requests.post(
-        #     'https://syd.storage.bunnycdn.com',
-        #     headers={
-        #         'AccessKey': 'ACCESS KEY GOES HERE',
-        #         'Content-Type': 'application/octet-stream',
-        #         'accept': 'application/json'
-        #     },
-        #     data=file_data
-        # )
+    with open('./tests/assets/sample.css', 'rb') as file_data:
         files = {'website': file_data}
         res = await upload_webpage(d.proposed_website, files)
         assert res.status_code == 200, res.text

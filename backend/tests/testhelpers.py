@@ -25,10 +25,10 @@ async def login(user_data: models.LoggingInUser):
             return res
 
 
-async def create_website(user_data=models.ProposedWebsite):
+async def create_website(access_token: str, website_data: models.ProposedWebsite = d.proposed_website):
     async with LifespanManager(main.app):
         async with AsyncClient(app=main.app, base_url='http://test') as ac:
-            res = await ac.post('/website', json=user_data)
+            res = await ac.post('/website', json=website_data, headers={'Authorization': 'Bearer ' + access_token})
             return res
 
 
