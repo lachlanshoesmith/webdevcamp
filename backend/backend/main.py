@@ -13,7 +13,7 @@ from psycopg_pool import AsyncConnectionPool
 
 from .models import (TokenData, ProposedWebsite, RegisteringStudentRequest,
                      RegisteringUser, RegisteringFullUser, RegisteringFullUserRequest,
-                     LoggingInUser, UserInDB, LoggedInUser)
+                     LoggingInUser, UserInDB, LoggedInUser, StudentOrAdministrator)
 
 import os
 import sys
@@ -112,6 +112,19 @@ async def get_user_from_email(email: str, conn: AsyncConnection) -> Optional[Use
             return user_data
 
 
+async def get_user_type(id: int, conn: AsyncConnection) -> Optional[StudentOrAdministrator]:
+    async with conn.cursor() as cur:
+        await cur.execute('''
+                        select * from get_user_type(%(id)s)
+                    ''', {'id': id})
+        res = await cur.fetchone()
+        user_type = res[0]
+        if not user_type:
+            return None
+        else:
+            return user_type
+
+
 async def authenticate_user(username: str, password: str, conn: AsyncConnection):
     user: UserInDB = await get_user_from_username(username, conn)
     if not user:
@@ -192,6 +205,7 @@ class websiteIDModel(BaseModel):
 
 @app.post('/website')
 async def create_website(website: ProposedWebsite, current_user: UserInDB = Depends(get_current_user), conn: AsyncConnection = Depends(get_connection)):
+    owner_type = await get_user_type(current_user['account_id'], conn)
     async with conn.cursor() as cur:
         try:
             res = await cur.execute('''
@@ -202,7 +216,6 @@ async def create_website(website: ProposedWebsite, current_user: UserInDB = Depe
 
             res = await res.fetchone()
             website_id = res[0]
-            owner_type = 'Student'
             try:
                 await cur.execute(sql.SQL('''
                     insert into {owner_type}_Owns_Website ({owner_type}_id, website_id)
@@ -218,18 +231,18 @@ async def create_website(website: ProposedWebsite, current_user: UserInDB = Depe
             except IntegrityError as e:
                 if 'not present' in e.diag.message_detail:
                     raise HTTPException(
-                        status_code=400, detail=f'The user does not exist or they are not a {website.owner_type}.')
+                        status_code=400, detail=f'The user does not exist or they are not a {owner_type}.')
                 else:
                     raise HTTPException(status_code=400, detail=e)
 
         except IntegrityError:
             raise HTTPException(
-                status_code=400, detail='Website already exists')
+                status_code=400, detail='Website already exists.')
 
 
 @app.post('/website/{website_id}')
 async def upload_webpage(website_id: int, current_user: UserInDB = Depends(get_current_user), conn: AsyncConnection = Depends(get_connection)):
-    pass
+    return {'webpage_id': 5}
 
 
 @app.post('/login')

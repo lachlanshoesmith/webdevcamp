@@ -32,8 +32,8 @@ async def create_website(access_token: str, website_data: models.ProposedWebsite
             return res
 
 
-async def upload_webpage(website_id: int, webpage_file):
+async def upload_webpage(access_token: str, website_id: int, webpage_file):
     async with LifespanManager(main.app):
         async with AsyncClient(app=main.app, base_url='http://test') as ac:
-            res = await ac.post('/website/' + str(website_id), files=webpage_file)
+            res = await ac.post('/website/' + str(website_id), files=webpage_file, headers={'Authorization': 'Bearer ' + access_token})
             return res

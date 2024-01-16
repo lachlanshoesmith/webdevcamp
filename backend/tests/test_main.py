@@ -364,7 +364,7 @@ async def test_login_administrator_with_incorrect_structure(test_db):
 
 
 @pytest.mark.anyio
-async def test_create_website(test_db):
+async def test_create_website_as_student(test_db):
     administrator = await register_administrator()
     assert administrator.status_code == 200
 
@@ -385,11 +385,79 @@ async def test_create_website(test_db):
 
 
 @pytest.mark.anyio
+async def test_create_website_as_administrator(test_db):
+    administrator = await register_administrator()
+    res = await login(d.logging_in_administrator)
+    assert res.status_code == 200
+
+    logged_in_administrator = res.json()['access_token']
+
+    res = await create_website(logged_in_administrator, d.proposed_website)
+
+    assert res.status_code == 200, res.text
+    assert 'website_id' in res.json()
+
+
+@pytest.mark.anyio
+async def test_create_website_without_token(test_db):
+    res = await create_website('invalid token', d.proposed_website)
+    assert res.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_create_website_without_website(test_db):
+    await register_administrator()
+    res = await login(d.logging_in_administrator)
+    token = res.json()['access_token']
+    res = await create_website(token, {})
+    assert res.status_code == 422, res.text
+
+
+@pytest.mark.anyio
+async def test_create_website_without_title(test_db):
+    await register_administrator()
+    res = await login(d.logging_in_administrator)
+    token = res.json()['access_token']
+
+    website = deepcopy(d.proposed_website)
+    del website['title']
+
+    res = await create_website(token, website)
+    assert res.status_code == 422, res.text
+
+
+@pytest.mark.anyio
+async def test_create_website_with_empty_title(test_db):
+    await register_administrator()
+    res = await login(d.logging_in_administrator)
+    token = res.json()['access_token']
+
+    website = deepcopy(d.proposed_website)
+    website['title'] = ''
+
+    res = await create_website(token, website)
+    assert res.status_code == 422, res.text
+
+
+@pytest.mark.anyio
 async def test_upload_webpage(test_db):
-    res = await register_administrator()
-    res = await register_student()
+    administrator = await register_administrator()
+    assert administrator.status_code == 200
+
+    student_data = deepcopy(d.registering_student)
+    student_data['administrator_id'] = administrator.json()['account_id']
+
+    await register_student(student_data)
+
+    res = await login(d.logging_in_student)
+    assert res.status_code == 200
+
+    token = res.json()['access_token']
+
+    res = await create_website(token, d.proposed_website)
+    website_id = res.json()['website_id']
 
     with open('./tests/assets/sample.css', 'rb') as file_data:
-        files = {'website': file_data}
-        res = await upload_webpage(d.proposed_website, files)
+        files = {'webpage': file_data}
+        res = await upload_webpage(token, website_id, files)
         assert res.status_code == 200, res.text

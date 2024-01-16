@@ -174,5 +174,16 @@ begin
 end;
 $$ language plpgsql;
 
+create or replace function get_user_type(provided_id integer) returns text as $$
+begin
+	if exists (select 1 from Student s where s.id = provided_id) then
+		return 'student';
+	elsif exists (select 1 from Administrator a where a.id = provided_id) then
+		return 'administrator';
+	else
+		raise exception 'User with ID % not found the in Student or Administrator tables', provided_id;
+	end if;
+end;
+$$ language plpgsql;
 
 create or replace trigger check_viewer_of_website before insert or update on Can_View_Website for each row execute procedure check_viewer_of_website();
