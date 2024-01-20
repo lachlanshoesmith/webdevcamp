@@ -129,8 +129,6 @@ async def get_user_type(id: int, conn: AsyncConnection) -> Optional[StudentOrAdm
 
 async def authenticate_user(username: str, password: str, conn: AsyncConnection):
     user: UserInDB = await get_user_from_username(username, conn)
-    raise HTTPException(
-        status_code=200, detail=f'{user}')
     if not user:
         return None
     if not verify_password(password, user['hashed_password'], user['registration_time']):
@@ -262,7 +260,8 @@ async def login_endpoint(user_data: LoggingInUser, conn: AsyncConnection = Depen
     """
     print('authenticating...')
     user: UserInDB = await authenticate_user(user_data.username, user_data.password, conn)
-    return {user}
+    raise HTTPException(
+        status_code=200, detail=f'{user}')
     print('authenticated')
 
     if not user:
