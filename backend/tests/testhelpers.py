@@ -21,6 +21,7 @@ async def register_student(student_data=d.registering_student):
 async def login(user_data: models.LoggingInUser):
     async with LifespanManager(main.app):
         async with AsyncClient(app=main.app, base_url='http://test') as ac:
+            print('attempting login')
             res = await ac.post('/login', json=user_data)
             return res
 
