@@ -276,6 +276,8 @@ async def test_login_administrator(test_db):
 
     assert res.status_code == 200, res.text
 
+    print(res.json())
+
     assert res.json()['email'] == 'lachie@example.com'
     assert res.json()['phone_number'] == '123-456-7890'
 

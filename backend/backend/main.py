@@ -86,7 +86,6 @@ async def get_user_from_username(username: str, conn: AsyncConnection) -> Option
         if not user_data:
             return None
         else:
-            print('got user from username')
             formatted_user_data: UserInDB = {
                 'account_id': user_data[0],
                 'given_name': user_data[3],
@@ -100,8 +99,6 @@ async def get_user_from_username(username: str, conn: AsyncConnection) -> Option
             if user_data[1]:
                 formatted_user_data['email'] = user_data[1]
                 formatted_user_data['phone_number'] = user_data[2]
-            raise HTTPException(
-                status_code=200, detail=f'{formatted_user_data}')
             return formatted_user_data
 
 
@@ -132,6 +129,8 @@ async def get_user_type(id: int, conn: AsyncConnection) -> Optional[StudentOrAdm
 
 async def authenticate_user(username: str, password: str, conn: AsyncConnection):
     user: UserInDB = await get_user_from_username(username, conn)
+    raise HTTPException(
+        status_code=200, detail=f'{user}')
     if not user:
         return None
     if not verify_password(password, user['hashed_password'], user['registration_time']):
