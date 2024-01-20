@@ -260,8 +260,6 @@ async def login_endpoint(user_data: LoggingInUser, conn: AsyncConnection = Depen
     """
     print('authenticating...')
     user: UserInDB = await authenticate_user(user_data.username, user_data.password, conn)
-    raise HTTPException(
-        status_code=200, detail=f'{user}')
     print('authenticated')
 
     if not user:
@@ -278,6 +276,9 @@ async def login_endpoint(user_data: LoggingInUser, conn: AsyncConnection = Depen
         data={'sub': user['username']},
         expires_delta=access_token_expires
     )
+
+    raise HTTPException(
+        status_code=200, detail=f'access token created')
 
     return {'account_id': user['account_id'], 'access_token': access_token, 'username': user['username'], 'given_name': user['given_name'], 'family_name': user['family_name'], 'email': user['email'], 'phone_number': user['phone_number']}
 
