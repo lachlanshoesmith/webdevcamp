@@ -24,6 +24,10 @@ load_dotenv()
 # https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/
 
 SECRET_KEY = os.getenv('SECRET_KEY')
+
+if SECRET_KEY == None:
+    sys.exit("Could not find required environment variable (ie. SECRET_KEY).")
+
 ALGORITHM = 'HS256'
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 

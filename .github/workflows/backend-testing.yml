@@ -35,6 +35,14 @@ jobs:
         ports:
           # Maps tcp port 5432 on service container to the host
           - 5432:5432
+
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: postgres
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      SECRET_KEY: cE7XYeF23XcqJtJrnNfeooLDXpt4qD4a55UWmhHT35m2XgXx5e6c8VeMqCRmJdtw
     
     steps:
     - uses: actions/checkout@v3
@@ -43,18 +51,11 @@ jobs:
     - name: Install dependencies and Python
       run: |
         poetry install
-
+        
     - name: Set up database
-      env:
-          # The hostname used to communicate with the PostgreSQL service container
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_NAME: postgres
-          DB_USER: postgres
-          DB_PASSWORD: postgres
       run: |
         poetry run python database/populate_database.py
         
     - name: Test with pytest
       run: |
-        poetry run pytest
+        poetry run pytest -v
