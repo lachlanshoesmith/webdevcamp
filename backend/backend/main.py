@@ -83,6 +83,8 @@ async def get_user_from_username(username: str, conn: AsyncConnection) -> Option
                         select * from get_user_from_username(%(username)s)
                     ''', {'username': username})
         user_data = await cur.fetchone()
+        raise HTTPException(
+            status_code=400, detail=f'Got user data: {user_data}')
         if not user_data:
             return None
         else:
