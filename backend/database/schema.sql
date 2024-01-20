@@ -1,10 +1,10 @@
-do $$ declare
-    r record;
-begin
-    for r in (select tablename from pg_tables where schemaname = 'public') loop
-        execute 'drop table if exists ' || quote_ident(r.tablename) || ' cascade';
-    end loop;
-end $$;
+-- do $$ declare
+--     r record;
+-- begin
+--     for r in (select tablename from pg_tables where schemaname = 'public') loop
+--         execute 'drop table if exists ' || quote_ident(r.tablename) || ' cascade';
+--     end loop;
+-- end $$;
 
 
 create table Account (
@@ -138,7 +138,7 @@ begin
 end;
 $$ language plpgsql;
 
-drop type Full_Account_Type cascade;
+-- drop type Full_Account_Type cascade;
 create type Full_Account_Type as (id integer, email text, phone_number text, given_name text, family_name text, username varchar(20), registration_time timestamp, hashed_password text);
 
 create or replace function get_user_from_email(provided_email text) returns setof Full_Account_Type as $$
@@ -174,5 +174,16 @@ begin
 end;
 $$ language plpgsql;
 
+create or replace function get_user_type(provided_id integer) returns text as $$
+begin
+	if exists (select 1 from Student s where s.id = provided_id) then
+		return 'student';
+	elsif exists (select 1 from Administrator a where a.id = provided_id) then
+		return 'administrator';
+	else
+		raise exception 'User with ID % not found the in Student or Administrator tables', provided_id;
+	end if;
+end;
+$$ language plpgsql;
 
 create or replace trigger check_viewer_of_website before insert or update on Can_View_Website for each row execute procedure check_viewer_of_website();

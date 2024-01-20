@@ -3,7 +3,7 @@ from httpx import AsyncClient
 from copy import deepcopy
 from backend import main
 from .testdata import TestData as d
-from .testhelpers import register_administrator, register_student, login
+from .testhelpers import register_administrator, register_student, login, create_website, upload_webpage
 
 
 @pytest.mark.anyio
@@ -280,6 +280,7 @@ async def test_login_administrator(test_db):
     assert res.json()['email'] == 'lachie@example.com'
     assert res.json()['phone_number'] == '123-456-7890'
 
+
 @pytest.mark.anyio
 async def test_login_administrator_with_incorrect_password(test_db):
     res = await register_administrator()
@@ -292,6 +293,7 @@ async def test_login_administrator_with_incorrect_password(test_db):
 
     assert res.status_code == 400, res.text
 
+
 @pytest.mark.anyio
 async def test_login_student(test_db):
     res = await register_administrator()
@@ -302,11 +304,12 @@ async def test_login_student(test_db):
 
     res = await register_student(student)
     assert res.status_code == 200, res.text
-    
+
     res = await login(d.logging_in_student)
     assert res.status_code == 200, res.text
     assert res.json()['email'] == None
     assert res.json()['phone_number'] == None
+
 
 @pytest.mark.anyio
 async def test_login_student_with_incorrect_password(test_db):
@@ -318,7 +321,7 @@ async def test_login_student_with_incorrect_password(test_db):
 
     res = await register_student(student)
     assert res.status_code == 200, res.text
-    
+
     res = await login({
         'username': student['user']['username'],
         'password': 'wrong_password'
@@ -347,6 +350,7 @@ async def test_login_student_with_incorrect_structure(test_db):
     res = await login(res.json())
     assert res.status_code == 422, res.text
 
+
 @pytest.mark.anyio
 async def test_login_administrator_with_incorrect_structure(test_db):
     res = await register_administrator()
@@ -357,3 +361,103 @@ async def test_login_administrator_with_incorrect_structure(test_db):
     res = await login(res.json())
 
     assert res.status_code == 422, res.text
+
+
+@pytest.mark.anyio
+async def test_create_website_as_student(test_db):
+    administrator = await register_administrator()
+    assert administrator.status_code == 200
+
+    student_data = deepcopy(d.registering_student)
+    student_data['administrator_id'] = administrator.json()['account_id']
+
+    student = await register_student(student_data)
+
+    res = await login(d.logging_in_student)
+    assert res.status_code == 200
+
+    logged_in_student = res.json()['access_token']
+
+    res = await create_website(logged_in_student, d.proposed_website)
+
+    assert res.status_code == 200, res.text
+    assert 'website_id' in res.json()
+
+
+@pytest.mark.anyio
+async def test_create_website_as_administrator(test_db):
+    administrator = await register_administrator()
+    res = await login(d.logging_in_administrator)
+    assert res.status_code == 200
+
+    logged_in_administrator = res.json()['access_token']
+
+    res = await create_website(logged_in_administrator, d.proposed_website)
+
+    assert res.status_code == 200, res.text
+    assert 'website_id' in res.json()
+
+
+@pytest.mark.anyio
+async def test_create_website_without_token(test_db):
+    res = await create_website('invalid token', d.proposed_website)
+    assert res.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_create_website_without_website(test_db):
+    await register_administrator()
+    res = await login(d.logging_in_administrator)
+    token = res.json()['access_token']
+    res = await create_website(token, {})
+    assert res.status_code == 422, res.text
+
+
+@pytest.mark.anyio
+async def test_create_website_without_title(test_db):
+    await register_administrator()
+    res = await login(d.logging_in_administrator)
+    token = res.json()['access_token']
+
+    website = deepcopy(d.proposed_website)
+    del website['title']
+
+    res = await create_website(token, website)
+    assert res.status_code == 422, res.text
+
+
+@pytest.mark.anyio
+async def test_create_website_with_empty_title(test_db):
+    await register_administrator()
+    res = await login(d.logging_in_administrator)
+    token = res.json()['access_token']
+
+    website = deepcopy(d.proposed_website)
+    website['title'] = ''
+
+    res = await create_website(token, website)
+    assert res.status_code == 422, res.text
+
+
+@pytest.mark.anyio
+async def test_upload_webpage(test_db):
+    administrator = await register_administrator()
+    assert administrator.status_code == 200
+
+    student_data = deepcopy(d.registering_student)
+    student_data['administrator_id'] = administrator.json()['account_id']
+
+    await register_student(student_data)
+
+    res = await login(d.logging_in_student)
+    assert res.status_code == 200
+
+    token = res.json()['access_token']
+
+    res = await create_website(token, d.proposed_website)
+    website_id = res.json()['website_id']
+
+    with open('./tests/assets/sample.css', 'rb') as file_data:
+        files = {'webpage': file_data}
+        res = await upload_webpage(token, website_id, files)
+        assert res.status_code == 200, res.text

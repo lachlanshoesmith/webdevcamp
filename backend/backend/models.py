@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from enum import Enum
 from typing import Union
 
@@ -67,6 +67,4 @@ class TokenData(BaseModel):
 
 
 class ProposedWebsite(BaseModel):
-    title: str
-    owner_type: StudentOrAdministrator
-    owner_id: int
+    title: str = Field(..., min_length=1)

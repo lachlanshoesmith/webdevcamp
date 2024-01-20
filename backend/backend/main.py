@@ -1,3 +1,4 @@
+from pydantic import BaseModel, ConfigDict
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
@@ -12,7 +13,7 @@ from psycopg_pool import AsyncConnectionPool
 
 from .models import (TokenData, ProposedWebsite, RegisteringStudentRequest,
                      RegisteringUser, RegisteringFullUser, RegisteringFullUserRequest,
-                     LoggingInUser, UserInDB, LoggedInUser)
+                     LoggingInUser, UserInDB, LoggedInUser, StudentOrAdministrator)
 
 import os
 import sys
@@ -57,7 +58,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-async def get_connection() -> AsyncConnection:
+async def get_connection():
     async with db_pool.connection() as conn:
         try:
             yield conn
@@ -111,6 +112,19 @@ async def get_user_from_email(email: str, conn: AsyncConnection) -> Optional[Use
             return user_data
 
 
+async def get_user_type(id: int, conn: AsyncConnection) -> Optional[StudentOrAdministrator]:
+    async with conn.cursor() as cur:
+        await cur.execute('''
+                        select * from get_user_type(%(id)s)
+                    ''', {'id': id})
+        res = await cur.fetchone()
+        user_type = res[0]
+        if not user_type:
+            return None
+        else:
+            return user_type
+
+
 async def authenticate_user(username: str, password: str, conn: AsyncConnection):
     user: UserInDB = await get_user_from_username(username, conn)
     if not user:
@@ -120,7 +134,7 @@ async def authenticate_user(username: str, password: str, conn: AsyncConnection)
     return user
 
 
-def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], conn: AsyncConnection = Depends(get_connection)) -> UserInDB:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail='Invalid authentication credentials',
@@ -137,7 +151,7 @@ def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
-    user = get_user_from_username(username=token_data.username)
+    user = await get_user_from_username(username=token_data.username, conn=conn)
     if user is None:
         raise credentials_exception
     return user
@@ -185,40 +199,50 @@ async def get_website(website_id: int, conn: AsyncConnection = Depends(get_conne
         return website_data
 
 
+class websiteIDModel(BaseModel):
+    website_id: int
+
+
 @app.post('/website')
-async def create_website(website: ProposedWebsite, conn: AsyncConnection = Depends(get_connection)):
+async def create_website(website: ProposedWebsite, current_user: UserInDB = Depends(get_current_user), conn: AsyncConnection = Depends(get_connection)):
+    owner_type = await get_user_type(current_user['account_id'], conn)
     async with conn.cursor() as cur:
         try:
-            await cur.execute('''
+            res = await cur.execute('''
                 insert into website (title)
                 values (%(title)s)
                 returning id;
             ''', {'title': website.title})
 
-            response = await cur.fetchone()
-            website_id = response[0]
+            res = await res.fetchone()
+            website_id = res[0]
             try:
                 await cur.execute(sql.SQL('''
-                    insert into {owner_type}OwnsWebsite ({owner_type}ID, websiteID)
+                    insert into {owner_type}_Owns_Website ({owner_type}_id, website_id)
                     values ({owner_id}, {website_id})
                 ''').format(
-                    owner_type=sql.SQL(website.owner_type),
-                    owner_id=sql.Literal(website.owner_id),
+                    owner_type=sql.SQL(owner_type),
+                    owner_id=sql.Literal(current_user['account_id']),
                     website_id=sql.Literal(website_id)
                 ))
 
                 await conn.commit()
+                return {'website_id': website_id}
             except IntegrityError as e:
                 if 'not present' in e.diag.message_detail:
                     raise HTTPException(
-                        status_code=400, detail=f'The user does not exist or they are not a {website.owner_type}.')
+                        status_code=400, detail=f'The user does not exist or they are not a {owner_type}.')
                 else:
                     raise HTTPException(status_code=400, detail=e)
 
         except IntegrityError:
             raise HTTPException(
-                status_code=400, detail='Website already exists')
-        return website_id
+                status_code=400, detail='Website already exists.')
+
+
+@app.post('/website/{website_id}')
+async def upload_webpage(website_id: int, current_user: UserInDB = Depends(get_current_user), conn: AsyncConnection = Depends(get_connection)):
+    return {'webpage_id': 5}
 
 
 @app.post('/login')
