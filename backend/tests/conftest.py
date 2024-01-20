@@ -15,12 +15,9 @@ def anyio_backend():
 @pytest.fixture
 def test_db():
     conninfo = f'host={os.getenv("DB_HOST")} port={os.getenv("DB_PORT")} dbname={os.getenv("DB_NAME")} user={os.getenv("DB_USER")} password={os.getenv("DB_PASSWORD")}'
-    print(f'conninfo={conninfo}')
     with psycopg.connect(conninfo) as conn:
-        print(f'conn={conn}')
         with conn.cursor() as cur:
             # currently only deletes account and the tables that reference account
             # ...which is (almost) all of them, i believe
             cur.execute('truncate account cascade')
             conn.commit()
-            print('done')

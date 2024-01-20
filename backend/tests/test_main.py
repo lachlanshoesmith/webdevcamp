@@ -8,9 +8,7 @@ from .testhelpers import register_administrator, register_student, login, create
 
 @pytest.mark.anyio
 async def test_register_administrator(test_db):
-    print('starting test_register_administrator')
     res = await register_administrator()
-    print('got response')
     assert res.status_code == 200, res.text
     assert 'account_id' in res.json()
 

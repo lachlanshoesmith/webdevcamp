@@ -7,10 +7,7 @@ from backend import main, models
 async def register_administrator(administrator_data=d.registering_administrator_data):
     async with LifespanManager(main.app):
         async with AsyncClient(app=main.app, base_url='http://test') as ac:
-            print('attempting to get response')
             res = await ac.post('/register', json=administrator_data)
-            print('got response')
-            print(res)
             return res
 
 
