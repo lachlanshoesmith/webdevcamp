@@ -388,3 +388,8 @@ async def register_full_account_endpoint(user_data: RegisteringFullUser, conn: A
         }
         await register_full_account(request, conn)
         return {'account_id': account_id}
+
+
+@app.get('/healthcheck')
+def healthcheck():
+    return {'status': 'ok'}
