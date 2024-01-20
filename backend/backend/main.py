@@ -6,6 +6,7 @@ from typing import Annotated, Optional
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from psycopg import DataError, IntegrityError, AsyncConnection, sql
@@ -60,6 +61,19 @@ async def lifespan(app: FastAPI):
     await db_pool.close()
 
 app = FastAPI(lifespan=lifespan)
+
+origins = [
+    "https://webdevcamp.day",
+    "http://localhost",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 async def get_connection():
