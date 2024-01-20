@@ -67,6 +67,7 @@ async def get_connection():
 
 
 def verify_password(plain_password: str, hashed_password, registration_time: datetime):
+    print('verifying password')
     salted_password = plain_password + str(registration_time)
     return pwd_context.verify(salted_password, hashed_password)
 
@@ -76,6 +77,7 @@ def get_password_hash(password, registration_time: datetime):
 
 
 async def get_user_from_username(username: str, conn: AsyncConnection) -> Optional[UserInDB]:
+    print('getting user from username')
     async with conn.cursor() as cur:
         await cur.execute('''
                         select * from get_user_from_username(%(username)s)
@@ -84,6 +86,7 @@ async def get_user_from_username(username: str, conn: AsyncConnection) -> Option
         if not user_data:
             return None
         else:
+            print('got user from username')
             formatted_user_data: UserInDB = {
                 'account_id': user_data[0],
                 'given_name': user_data[3],
@@ -256,7 +259,9 @@ async def login_endpoint(user_data: LoggingInUser, conn: AsyncConnection = Depen
     Returns:
         LoggedInUser: A dictionary containing the access token and the user's ID.
     """
+    print('authenticating...')
     user: UserInDB = await authenticate_user(user_data.username, user_data.password, conn)
+    print('authenticated')
 
     if not user:
         raise HTTPException(
@@ -267,6 +272,7 @@ async def login_endpoint(user_data: LoggingInUser, conn: AsyncConnection = Depen
 
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
+    print('creating access token')
     access_token: str = create_access_token(
         data={'sub': user['username']},
         expires_delta=access_token_expires
