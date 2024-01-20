@@ -42,6 +42,7 @@ jobs:
       DB_NAME: postgres
       DB_USER: postgres
       DB_PASSWORD: postgres
+      SECRET_KEY: cE7XYeF23XcqJtJrnNfeooLDXpt4qD4a55UWmhHT35m2XgXx5e6c8VeMqCRmJdtw
     
     steps:
     - uses: actions/checkout@v3
