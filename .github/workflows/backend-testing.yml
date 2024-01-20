@@ -16,6 +16,23 @@ jobs:
     defaults:
       run:
         working-directory: ./backend
+
+    # Service containers to run with `container-job`
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres
+        # Provide the password for postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
     steps:
     - uses: actions/checkout@v3
     - name: Set up Poetry
@@ -23,6 +40,18 @@ jobs:
     - name: Install dependencies and Python
       run: |
         poetry install
+
+    - name: Set up database
+      env:
+          # The hostname used to communicate with the PostgreSQL service container
+          DB_HOST: postgres
+          DB_PORT: 5432
+          DB_NAME: postgres
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+      run: |
+        poetry run python database/populate_database.py
+        
     - name: Test with pytest
       run: |
         poetry run pytest
