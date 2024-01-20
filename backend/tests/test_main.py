@@ -272,8 +272,6 @@ async def test_register_student_with_incorrect_types(test_db):
 async def test_login_administrator(test_db):
     res = await register_administrator()
     assert res.status_code == 200
-    print('registered')
-    print('logging in')
     res = await login(d.logging_in_administrator)
 
     assert res.status_code == 200, res.text

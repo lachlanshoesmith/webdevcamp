@@ -261,6 +261,7 @@ async def login_endpoint(user_data: LoggingInUser, conn: AsyncConnection = Depen
     """
     print('authenticating...')
     user: UserInDB = await authenticate_user(user_data.username, user_data.password, conn)
+    return {user}
     print('authenticated')
 
     if not user:
