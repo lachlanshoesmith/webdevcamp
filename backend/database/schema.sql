@@ -1,10 +1,10 @@
-do $$ declare
-    r record;
-begin
-    for r in (select tablename from pg_tables where schemaname = 'public') loop
-        execute 'drop table if exists ' || quote_ident(r.tablename) || ' cascade';
-    end loop;
-end $$;
+-- do $$ declare
+--     r record;
+-- begin
+--     for r in (select tablename from pg_tables where schemaname = 'public') loop
+--         execute 'drop table if exists ' || quote_ident(r.tablename) || ' cascade';
+--     end loop;
+-- end $$;
 
 
 create table Account (
@@ -138,7 +138,7 @@ begin
 end;
 $$ language plpgsql;
 
-drop type Full_Account_Type cascade;
+-- drop type Full_Account_Type cascade;
 create type Full_Account_Type as (id integer, email text, phone_number text, given_name text, family_name text, username varchar(20), registration_time timestamp, hashed_password text);
 
 create or replace function get_user_from_email(provided_email text) returns setof Full_Account_Type as $$
