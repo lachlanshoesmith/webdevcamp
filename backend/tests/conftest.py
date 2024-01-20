@@ -23,3 +23,4 @@ def test_db():
             # ...which is (almost) all of them, i believe
             cur.execute('truncate account cascade')
             conn.commit()
+            print('done')
