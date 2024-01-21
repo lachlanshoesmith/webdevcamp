@@ -63,8 +63,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 origins = [
-    "https://webdevcamp.day",
-    "http://localhost",
+    "https://webdevcamp.day"
 ]
 
 app.add_middleware(
