@@ -24,6 +24,10 @@ function Root() {
         <p>
           By <a href="https://github.com/lachlanshoesmith">Lachlan Shoesmith</a>
         </p>
+        <p className={classes.smallText}>
+          webdevcamp is not associated with Skill Samurai Rouse Hill or Skill
+          Samurai as a broader company.
+        </p>
       </footer>
     </>
   );

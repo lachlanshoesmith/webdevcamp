@@ -1,5 +1,6 @@
 import Button from '../components/Button/Button';
 import { useForm, SubmitHandler } from 'react-hook-form';
+import { useState } from 'react';
 
 type Inputs = {
   username: string;
@@ -12,15 +13,25 @@ export default function Login() {
     formState: { errors },
     handleSubmit,
   } = useForm<Inputs>();
-  const onSubmit: SubmitHandler<Inputs> = (data) => {
-    console.log(data);
-    fetch('https://webdevcamp.fly.dev/login', {
+  const [loginErrors, setLoginErrors] = useState('');
+
+  const onSubmit: SubmitHandler<Inputs> = async (data) => {
+    const res = await fetch('https://webdevcamp.fly.dev/login', {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(data),
-    }).then((res) => {
-      console.log(res.status);
-      if (res.ok) console.log(res.json());
     });
+
+    const responseJSON = await res.json();
+    const responseDetail: string = responseJSON.detail;
+
+    if (!res.ok) {
+      setLoginErrors(responseDetail);
+    } else {
+      console.log(responseDetail);
+    }
   };
   return (
     <>
@@ -47,6 +58,7 @@ export default function Login() {
         />
         <Button type="submit">Login</Button>
       </form>
+      {loginErrors && <p>{loginErrors}</p>}
     </>
   );
 }
