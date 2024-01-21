@@ -65,7 +65,8 @@ app = FastAPI(lifespan=lifespan)
 origins = [
     "https://webdevcamp.day",
     "https://webdevcamp.pages.dev",
-    "https://feature-frontend-mvp.webdevcamp.pages.dev"
+    "https://feature-frontend-mvp.webdevcamp.pages.dev",
+    "http://localhost:5173"
 ]
 
 app.add_middleware(
