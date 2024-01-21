@@ -13,6 +13,7 @@ export default function Login() {
     handleSubmit,
   } = useForm<Inputs>();
   const onSubmit: SubmitHandler<Inputs> = (data) => {
+    console.log(data);
     fetch('https://webdevcamp.fly.dev/login', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -37,8 +38,7 @@ export default function Login() {
         />
         <input
           type="password"
-          {...(register('password'),
-          {
+          {...register('password', {
             required: true,
             minLength: 8,
           })}
