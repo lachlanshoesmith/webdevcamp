@@ -9,6 +9,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from psycopg import DataError, IntegrityError, AsyncConnection, sql
+from psycopg.errors import UniqueViolation
 from psycopg_pool import AsyncConnectionPool
 
 from .models import (TokenData, ProposedWebsite, RegisteringStudentRequest,
@@ -362,11 +363,15 @@ async def create_account(user_data: RegisteringUser, conn: AsyncConnection):
 
 async def register_full_account(user_data: RegisteringFullUserRequest, conn: AsyncConnection):
     async with conn.cursor() as cur:
-        await cur.execute('''
-                insert into Full_Account (id, email, phone_number)
-                values (%(id)s, %(email)s, %(phone_number)s)
-            ''', {'id': user_data['id'], 'email': user_data['user'].email, 'phone_number': user_data['user'].phone_number})
-        await conn.commit()
+        try:
+            await cur.execute('''
+                    insert into Full_Account (id, email, phone_number)
+                    values (%(id)s, %(email)s, %(phone_number)s)
+                ''', {'id': user_data['id'], 'email': user_data['user'].email, 'phone_number': user_data['user'].phone_number})
+            await conn.commit()
+        except UniqueViolation:
+            raise HTTPException(
+                status_code=400, detail='Phone number taken.')
 
 
 @app.post('/register')
