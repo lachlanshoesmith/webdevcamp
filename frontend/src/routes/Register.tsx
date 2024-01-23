@@ -68,16 +68,13 @@ export default function Register() {
           aria-invalid={errors.username ? 'true' : 'false'}
           placeholder="Username"
         />
-        {
-          // TODO: replace hashed_password with 'password' across the board for simplicity
-        }
         <input
           type="password"
           {...register('hashed_password', {
             required: true,
             minLength: 8,
           })}
-          aria-invalid={errors.password ? 'true' : 'false'}
+          aria-invalid={errors.hashed_password ? 'true' : 'false'}
           placeholder="Password"
         />
         <input
