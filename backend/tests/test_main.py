@@ -42,6 +42,20 @@ async def test_register_administrator_with_same_email(test_db):
 
 
 @pytest.mark.anyio
+async def test_register_administrator_with_same_phone_number(test_db):
+    res = await register_administrator()
+    assert res.status_code == 200
+
+    administrator = deepcopy(d.registering_administrator_data)
+    administrator['username'] = 'different_username'
+    administrator['email'] = 'different_email@gmail.com'
+
+    res = await register_administrator(administrator)
+    assert res.status_code == 400, res.text
+    assert res.json()['detail'] == 'Phone number taken.'
+
+
+@pytest.mark.anyio
 async def test_register_student(test_db):
     res = await register_administrator()
     assert res.status_code == 200
