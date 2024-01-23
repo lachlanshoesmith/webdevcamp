@@ -6,7 +6,7 @@ type Inputs = {
   given_name: string;
   family_name: string;
   username: string;
-  password: string;
+  hashed_password: string;
   account_type: string;
   email: string;
   phone_number: string;
@@ -21,6 +21,7 @@ export default function Register() {
   const [registerErrors, setRegisterErrors] = useState('');
 
   const onSubmit: SubmitHandler<Inputs> = async (data) => {
+    data.account_type = 'administrator';
     const res = await fetch('https://webdevcamp.fly.dev/register', {
       method: 'POST',
       headers: {
@@ -30,12 +31,11 @@ export default function Register() {
     });
 
     const responseJSON = await res.json();
-    const responseDetail: string = responseJSON.detail;
 
     if (!res.ok) {
-      setRegisterErrors(responseDetail);
+      setRegisterErrors(responseJSON.detail);
     } else {
-      console.log(responseDetail);
+      console.log(res.json());
     }
   };
   return (
@@ -73,7 +73,7 @@ export default function Register() {
         }
         <input
           type="password"
-          {...register('password', {
+          {...register('hashed_password', {
             required: true,
             minLength: 8,
           })}
