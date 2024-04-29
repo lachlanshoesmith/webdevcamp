@@ -1,0 +1,56 @@
+/*
+    This is your CSS file! This is how we make our website
+    look very pretty. We also tend to write code in here that
+    makes sure our website looks good on phones.
+*/
+
+/*
+    Don't worry too much about what this code here does - it just
+    makes our coding life slightly less frustrating.
+    However, you're more than welcome to ask me if want to know all
+    the technical details! 😉
+*/
+@import url('https://fonts.googleapis.com/css2?family=Alfa+Slab+One&display=swap');
+
+* {
+  box-sizing: border-box;
+}
+
+.styled {
+  color: orangered;
+  background: url('https://as1.ftcdn.net/v2/jpg/05/72/78/52/1000_F_572785287_kC9aEOIFW1k4ki4d9BEQ7zxc39yVy79Q.jpg');
+  background-size: cover;
+  font-family: 'Alfa Slab One';
+}
+
+#unlockSection {
+  margin: auto;
+  border: 1px solid black;
+  width: 40vw;
+  padding: 48px;
+  font-family: sans-serif;
+}
+
+#unlockSection p {
+  margin-top: 0;
+}
+
+#unlockSection.styled {
+  display: none;
+}
+
+.centred {
+  text-align: center;
+}
+
+.sidebyside {
+  display: flex;
+  justify-content: space-around;
+}
+
+@media screen and (max-width: 600px) {
+  /*
+        Specific styles that change how our website looks on phones
+        and smaller screens should go here.
+    */
+}
